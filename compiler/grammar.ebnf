@@ -1,0 +1,62 @@
+program
+  = { statement };
+
+statement
+  = function_declaration
+  | return_statement
+  | expression, terminator;
+
+function_declaration 
+  = "func", identifier, "(", [ parameter_declaration, { ",", parameter_declaration } ], ")", "->", identifier, 
+    "{", { statement }, "}";
+
+parameter_declaration
+  = identifier, identifier;
+
+return_statement
+ = "return", expression, terminator;
+
+expression
+  = assignment
+  | unary_operation
+  | binary_operation
+  | function_call;
+
+assignment
+  = expression, [arithmetic_operator], "=", expression;
+
+function_call
+  = identifier, "(", [ expression, { ",", expression } ], ")";
+
+unary_operation
+  = increment_decrement
+  | unary_arithmetic_operation
+  | "!", identifier;
+
+increment_decrement
+  = ("++" | "--"), expression
+  | expression, ("++" | "--");
+
+unary_arithmetic_operation
+  = ("+" | "-"), expression;
+
+binary_operation
+  = expression, binary_operator, expression;
+
+binary_operator
+  = "+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<" | ">" | "<=" | ">=" | ".";
+
+identifier
+  = (letter | "_" ), { letter | digit | "_" };
+
+terminator
+  = ";";
+
+digit
+  = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "0";
+
+integer_literal
+  = digit, { digit };
+
+letter
+  = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z" | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z";
