@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 
+namespace Cepheid::Tokens {
 class Tokeniser {
  public:
   explicit Tokeniser(std::string_view src);
@@ -22,5 +23,7 @@ class Tokeniser {
   std::optional<char> consume();
 
   size_t m_cursor = 0;
+  SourceLocation m_currentLocation;
   std::string_view m_src;
 };
+}  // namespace Cepheid::Tokeniser

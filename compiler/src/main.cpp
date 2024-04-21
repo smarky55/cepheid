@@ -1,5 +1,5 @@
 
-#include <Cepheid.h>
+#include <Compiler.h>
 
 #include <iostream>
 #include <fstream>
@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
     src = ss.str();
   }
 
-  Cepheid cep;
+  Cepheid::Compiler cep;
 
   cep.compile(src);
 }

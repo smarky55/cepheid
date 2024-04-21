@@ -6,6 +6,8 @@
 #include <format>
 #include <map>
 
+using namespace Cepheid::Tokens;
+
 Tokeniser::Tokeniser(std::string_view src) : m_src(src) {
 }
 
@@ -52,6 +54,8 @@ std::optional<Token> Tokeniser::readTokenOrKeyword() {
     return std::nullopt;
   }
 
+  SourceLocation startLocation = m_currentLocation;
+
   std::string val(1, *consume());
 
   for (std::optional<char> next = peek(); next && isIdentChar(*next); next = peek()) {
@@ -61,15 +65,16 @@ std::optional<Token> Tokeniser::readTokenOrKeyword() {
   bool keyword = isKeyword(val);
 
   return std::optional<Token>(
-      std::in_place, keyword ? TokenType::Keyword : TokenType::Identifier, val);
+      std::in_place, keyword ? TokenType::Keyword : TokenType::Identifier, val, startLocation);
 }
 
 std::optional<Token> Tokeniser::readTerminator() {
   if (*peek() != ';') {
     return std::nullopt;
   }
+  SourceLocation startLocation = m_currentLocation;
   consume();
-  return std::optional<Token>(std::in_place, TokenType::Terminator, std::nullopt);
+  return std::optional<Token>(std::in_place, TokenType::Terminator, std::nullopt, startLocation);
 }
 
 std::optional<Token> Tokeniser::readOperator() {
@@ -78,16 +83,19 @@ std::optional<Token> Tokeniser::readOperator() {
   if (std::ranges::find(operators, *peek()) == operators.end()) {
     return std::nullopt;
   }
+  SourceLocation startLocation = m_currentLocation;
 
-  return std::optional<Token>(std::in_place, TokenType::Operator, std::string(1, *consume()));
+  return std::optional<Token>(
+      std::in_place, TokenType::Operator, std::string(1, *consume()), startLocation);
 }
 
 std::optional<Token> Tokeniser::readDelimiter() {
   if (*peek() != ',') {
     return std::nullopt;
   }
+  SourceLocation startLocation = m_currentLocation;
   consume();
-  return std::optional<Token>(std::in_place, TokenType::Delimiter, std::nullopt);
+  return std::optional<Token>(std::in_place, TokenType::Delimiter, std::nullopt, startLocation);
 }
 
 std::optional<Token> Tokeniser::readBracket() {
@@ -100,8 +108,9 @@ std::optional<Token> Tokeniser::readBracket() {
       {']', TokenType::CloseBracket}};
 
   if (auto it = brackets.find(*peek()); it != brackets.end()) {
+    SourceLocation startLocation = m_currentLocation;
     consume();
-    return std::optional<Token>(std::in_place, it->second, std::nullopt);
+    return std::optional<Token>(std::in_place, it->second, std::nullopt, startLocation);
   }
 
   return std::nullopt;
@@ -111,13 +120,14 @@ std::optional<Token> Tokeniser::readIntegerLiteral() {
   if (!std::isdigit(*peek())) {
     return std::nullopt;
   }
+  SourceLocation startLocation = m_currentLocation;
 
   std::string literal;
   while (std::isdigit(*peek())) {
     literal += *consume();
   }
 
-  return std::optional<Token>(std::in_place, TokenType::IntegerLiteral, literal);
+  return std::optional<Token>(std::in_place, TokenType::IntegerLiteral, literal, startLocation);
 }
 
 std::optional<char> Tokeniser::peek() const {
@@ -132,5 +142,12 @@ std::optional<char> Tokeniser::consume() {
   if (m_cursor >= m_src.size()) {
     return std::nullopt;
   }
+
+  m_currentLocation.character++;
+  if (m_src.at(m_cursor) == '\n') {
+    m_currentLocation.character = 0;
+    m_currentLocation.line++;
+  }
+
   return m_src.at(m_cursor++);
 }
