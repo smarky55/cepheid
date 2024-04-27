@@ -1,0 +1,51 @@
+#pragma once
+
+#include <Tokeniser/Token.h>
+
+#include <initializer_list>
+#include <memory>
+#include <string_view>
+#include <vector>
+
+namespace Cepheid::Parser {
+enum class NodeType {
+  Program,
+  Identifier,
+  TypeName,
+  Function,
+  Scope,
+  VariableDeclaration,
+  ReturnType,
+  ReturnStatement,
+  Expression,
+  BinaryOperation,
+  UnaryOperation,
+  Operator,
+  IntegerLiteral,
+};
+
+class Node;
+using NodePtr = std::unique_ptr<Node>;
+
+class Node {
+ public:
+  template <typename... ArgsT>
+  static NodePtr make(ArgsT&&... args);
+
+  explicit Node(NodeType type);
+  Node(NodeType type, Tokens::Token token);
+  Node(NodeType type, NodePtr child);
+  void addChild(NodePtr child);
+
+ private:
+  NodeType m_type;
+  std::optional<Tokens::Token> m_token;
+  std::vector<NodePtr> m_children;
+};
+
+template <typename... ArgsT>
+inline NodePtr Node::make(ArgsT&&... args) {
+  return std::make_unique<Node>(std::forward<ArgsT>(args)...);
+}
+
+}  // namespace Cepheid::Parser

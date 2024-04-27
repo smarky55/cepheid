@@ -4,50 +4,55 @@ program
 statement
   = function_declaration
   | return_statement
-  | expression, terminator;
+  | expression_statement;
 
 function_declaration 
-  = "func", identifier, "(", [ parameter_declaration, { ",", parameter_declaration } ], ")", "->", identifier, 
-    "{", { statement }, "}";
+  = "func" identifier "(" [ parameter_declaration { "," parameter_declaration } ] ")" "->" identifier 
+    "{" { statement } "}";
 
 parameter_declaration
-  = identifier, identifier;
+  = identifier identifier;
 
 return_statement
- = "return", expression, terminator;
+ = "return" expression terminator;
+
+expression_statement
+  = expression terminator;
 
 expression
   = assignment
-  | unary_operation
-  | binary_operation
+  | equality_operation
   | function_call;
 
 assignment
-  = expression, [arithmetic_operator], "=", expression;
+  = expression [arithmetic_operator] "=" expression;
 
 function_call
-  = identifier, "(", [ expression, { ",", expression } ], ")";
+  = identifier "(" [ expression { "," expression } ] ")";
+
+equality_operation
+  = comparison_operation { ( "==" | "!=" ) comparison_operation };
+
+comparison_operation
+  = term_operation { ( ">" | ">=" | "<=" | "<" ) term_operation };
+
+term_operation
+  = factor_operation { ( "+" | "-" ) factor_operation };
+
+factor_operation
+  = unary_operation { ( "/" | "*" ) unary_operation };
 
 unary_operation
-  = increment_decrement
-  | unary_arithmetic_operation
-  | "!", identifier;
+  = ( "!" | "-" ) unary_operation
+  | base_operation;
 
-increment_decrement
-  = ("++" | "--"), expression
-  | expression, ("++" | "--");
-
-unary_arithmetic_operation
-  = ("+" | "-"), expression;
-
-binary_operation
-  = expression, binary_operator, expression;
-
-binary_operator
-  = "+" | "-" | "*" | "/" | "%" | "==" | "!=" | "<" | ">" | "<=" | ">=" | ".";
+base_operation
+  = integer_literal
+  | identifier
+  | "(" expression ")";
 
 identifier
-  = (letter | "_" ), { letter | digit | "_" };
+  = (letter | "_" ) { letter | digit | "_" };
 
 terminator
   = ";";
@@ -56,7 +61,7 @@ digit
   = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "0";
 
 integer_literal
-  = digit, { digit };
+  = digit { digit };
 
 letter
   = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z" | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z";

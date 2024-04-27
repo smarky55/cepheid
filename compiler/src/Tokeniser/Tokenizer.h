@@ -26,4 +26,4 @@ class Tokeniser {
   SourceLocation m_currentLocation;
   std::string_view m_src;
 };
-}  // namespace Cepheid::Tokeniser
+}  // namespace Cepheid::Tokens
