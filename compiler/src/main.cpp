@@ -34,5 +34,10 @@ int main(int argc, char* argv[]) {
 
   Cepheid::Compiler cep;
 
-  cep.compile(src);
+  std::string prog = cep.compile(src);
+
+  {
+    std::ofstream asmOut("out.asm");
+    asmOut << prog;
+  }
 }
