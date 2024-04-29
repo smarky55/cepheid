@@ -17,3 +17,24 @@ Node::Node(NodeType type, NodePtr child) : m_type(type) {
 void Node::addChild(NodePtr child) {
   m_children.push_back(std::move(child));
 }
+
+NodeType Node::type() const {
+  return m_type;
+}
+
+const std::optional<Token>& Cepheid::Parser::Node::token() const {
+  return m_token;
+}
+
+const std::vector<NodePtr>& Cepheid::Parser::Node::children() const {
+  return m_children;
+}
+
+const Node* Cepheid::Parser::Node::child(NodeType type) const {
+  for (const auto& node : m_children) {
+    if (node->type() == type) {
+      return node.get();
+    }
+  }
+  return nullptr;
+}
