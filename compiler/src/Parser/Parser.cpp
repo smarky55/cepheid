@@ -160,6 +160,9 @@ std::optional<Token> Parser::parseOperator(const std::vector<std::string_view>& 
     for (int i = 0; i < op.size(); i++) {
       if (auto next = checkNextHasValue(TokenType::Operator, std::string(1, op[i]), i)) {
         match = addTokens(match, next);
+      } else {
+        match = std::nullopt;
+        break;
       }
     }
     if (match && (!result || match->value->size() > result->value.value_or("").size())) {
