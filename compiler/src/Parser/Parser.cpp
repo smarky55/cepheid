@@ -1,5 +1,7 @@
 #include "Parser.h"
 
+#include "Node/UnaryOperationNode.h"
+
 #include <Parser/ParseException.h>
 #include <Parser/Node/BinaryOperationNode.h>
 
@@ -114,7 +116,7 @@ NodePtr Parser::parseScope() {
   return scopeNode;
 }
 
-NodePtr Cepheid::Parser::Parser::parseStatement() {
+NodePtr Parser::parseStatement() {
   if (NodePtr returnNode = parseReturnStatement()) {
     return returnNode;
   } else if (NodePtr functionDeclaration = parseFunctionDeclaration()) {
@@ -123,7 +125,7 @@ NodePtr Cepheid::Parser::Parser::parseStatement() {
   return nullptr;
 }
 
-NodePtr Cepheid::Parser::Parser::parseReturnStatement() {
+NodePtr Parser::parseReturnStatement() {
   if (!checkNextHasValue(TokenType::Keyword, "return")) {
     return nullptr;
   }
@@ -143,41 +145,49 @@ NodePtr Cepheid::Parser::Parser::parseReturnStatement() {
   return returnNode;
 }
 
-std::optional<Token> Cepheid::Parser::Parser::parseOperator(
-    const std::vector<std::string_view>& operators) {
-  auto getNextToken = [this, operators]() {
-    auto tokenIt = std::ranges::find_if(operators, [this](std::string_view op) {
-      return checkNextHasValue(TokenType::Operator, std::string(op)).has_value();
-    });
-    return tokenIt == operators.end() ? std::nullopt : consume();
+std::optional<Token> Parser::parseOperator(const std::vector<std::string_view>& operators) {
+  auto addTokens = [](std::optional<Token> lhs, const std::optional<Token>& rhs) {
+    if (!lhs) {
+      return rhs;
+    }
+    *lhs->value += *rhs->value;
+    return lhs;
   };
 
-  std::optional<Token> opToken;
-  for (auto token = getNextToken(); token; token = getNextToken()) {
-    if (!opToken) {
-      opToken = token;
-    } else {
-      *opToken->value += *token->value;
+  std::optional<Token> result;
+  for (const auto& op : operators) {
+    std::optional<Token> match;
+    for (int i = 0; i < op.size(); i++) {
+      if (auto next = checkNextHasValue(TokenType::Operator, std::string(1, op[i]), i)) {
+        match = addTokens(match, next);
+      }
+    }
+    if (match && (!result || match->value->size() > result->value.value_or("").size())) {
+      result = match;
     }
   }
 
-  return opToken;
+  if(result) {
+    consume(result->value->size()-1);
+  }
+
+  return result;
 }
 
-NodePtr Cepheid::Parser::Parser::parseExpression() {
+NodePtr Parser::parseExpression() {
   return parseEqualityOperation();
 }
 
-NodePtr Cepheid::Parser::Parser::parseEqualityOperation() {
+NodePtr Parser::parseEqualityOperation() {
   return parseComparisonOperation();
 }
 
-NodePtr Cepheid::Parser::Parser::parseComparisonOperation() {
+NodePtr Parser::parseComparisonOperation() {
   NodePtr operationNode = parseTermOperation();
 
   while (std::optional<Token> opToken = parseOperator({">", "<", ">=", "<="})) {
     // Convert operator token into an operation
-    BinaryOperation operation = tokenToOperation(*opToken);
+    BinaryOperation operation = tokenToBinaryOperation(*opToken);
 
     // Create node for the operation
     auto binaryOpNode = std::make_unique<BinaryOperationNode>(operation);
@@ -199,12 +209,12 @@ NodePtr Cepheid::Parser::Parser::parseComparisonOperation() {
   return operationNode;
 }
 
-NodePtr Cepheid::Parser::Parser::parseTermOperation() {
+NodePtr Parser::parseTermOperation() {
   NodePtr operationNode = parseFactorOperation();
 
   while (std::optional<Token> opToken = parseOperator({"+", "-"})) {
     // Convert operator token into an operation
-    BinaryOperation operation = tokenToOperation(*opToken);
+    BinaryOperation operation = tokenToBinaryOperation(*opToken);
 
     // Create node for the operation
     auto binaryOpNode = std::make_unique<BinaryOperationNode>(operation);
@@ -226,12 +236,12 @@ NodePtr Cepheid::Parser::Parser::parseTermOperation() {
   return operationNode;
 }
 
-NodePtr Cepheid::Parser::Parser::parseFactorOperation() {
+NodePtr Parser::parseFactorOperation() {
   NodePtr operationNode = parseUnaryOperation();
 
   while (std::optional<Token> opToken = parseOperator({"*", "/"})) {
     // Convert operator token into an operation
-    BinaryOperation operation = tokenToOperation(*opToken);
+    BinaryOperation operation = tokenToBinaryOperation(*opToken);
 
     // Create node for the operation
     auto binaryOpNode = std::make_unique<BinaryOperationNode>(operation);
@@ -253,21 +263,23 @@ NodePtr Cepheid::Parser::Parser::parseFactorOperation() {
   return operationNode;
 }
 
-NodePtr Cepheid::Parser::Parser::parseUnaryOperation() {
-  if (checkNextHasValue(TokenType::Operator, "-") || checkNextHasValue(TokenType::Operator, "!")) {
-    auto unaryNode = Node::make(NodeType::UnaryOperation);
-    unaryNode->addChild(Node::make(NodeType::Operator, *consume()));
+NodePtr Parser::parseUnaryOperation() {
+  if (const std::optional<Token> opToken = parseOperator({"-", "!", "--", "++"})) {
+    UnaryOperation operation = tokenToUnaryOperation(*opToken);
+
+    auto unaryNode = std::make_unique<UnaryOperationNode>(operation);
+
     auto child = parseUnaryOperation();
     if (!child) {
       throw ParseException("Expected value in unary expression");
     }
-    unaryNode->addChild(std::move(child));
+    unaryNode->setOperand(std::move(child));
     return unaryNode;
   }
   return parseBaseOperation();
 }
 
-NodePtr Cepheid::Parser::Parser::parseBaseOperation() {
+NodePtr Parser::parseBaseOperation() {
   if (checkNextHasValue(TokenType::IntegerLiteral)) {
     return Node::make(NodeType::IntegerLiteral, *consume());
   }
@@ -298,8 +310,8 @@ std::optional<Token> Parser::checkNextHasValue(
   return isType && containsValue ? next : std::nullopt;
 }
 
-std::optional<Token> Cepheid::Parser::Parser::checkNextCompound(
-    Tokens::TokenType type, const std::vector<std::string>& sequence) {
+std::optional<Token> Parser::checkNextCompound(
+    TokenType type, const std::vector<std::string>& sequence) {
   std::optional<Token> ret;
 
   for (size_t i = 0; i < sequence.size(); i++) {

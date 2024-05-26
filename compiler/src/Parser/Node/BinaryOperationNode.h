@@ -2,10 +2,6 @@
 
 #include <Parser/Node/ParseNode.h>
 
-namespace Cepheid::Tokens {
-struct Token;
-}
-
 namespace Cepheid::Parser {
 
 enum class BinaryOperation {
@@ -21,7 +17,7 @@ enum class BinaryOperation {
   NotEqual
 };
 
-[[nodiscard]] BinaryOperation tokenToOperation(const Tokens::Token& token);
+[[nodiscard]] BinaryOperation tokenToBinaryOperation(const Tokens::Token& token);
 
 class BinaryOperationNode : public Node {
  public:

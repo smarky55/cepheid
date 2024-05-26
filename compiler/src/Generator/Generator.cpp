@@ -2,6 +2,7 @@
 
 #include <Generator/GenerationException.h>
 #include <Parser/Node/BinaryOperationNode.h>
+#include <Parser/Node/UnaryOperationNode.h>
 #include <Tokeniser/Token.h>
 
 #include <array>
@@ -139,7 +140,27 @@ std::string Generator::genBinaryOperation(
 
 std::string Generator::genUnaryOperation(
     const Parser::Node* node, std::string_view resultReg) const {
-  return genBaseOperation(node, resultReg);
+  const auto* unaryNode = static_cast<const Parser::UnaryOperationNode*>(node);
+  std::string result = genExpression(unaryNode->operand(), resultReg);
+
+  switch (unaryNode->operation()) {
+    case Parser::UnaryOperation::Negate:
+      result += instruction("neg", {resultReg});
+      break;
+    case Parser::UnaryOperation::Not:
+      result += instruction("not", {resultReg});
+      break;
+    case Parser::UnaryOperation::Decrement:
+      result += instruction("dec", {resultReg});
+      break;
+    case Parser::UnaryOperation::Increment:
+      result += instruction("inc", {resultReg});
+      break;
+    default:
+      throw GenerationException("Unexpected unary operation");
+  }
+
+  return result;
 }
 
 std::string Generator::genBaseOperation(

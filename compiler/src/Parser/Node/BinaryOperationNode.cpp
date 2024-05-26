@@ -4,7 +4,7 @@
 
 using namespace Cepheid::Parser;
 
-BinaryOperation Cepheid::Parser::tokenToOperation(const Cepheid::Tokens::Token& token) {
+BinaryOperation Cepheid::Parser::tokenToBinaryOperation(const Cepheid::Tokens::Token& token) {
   static std::map<std::string_view, BinaryOperation> tokenToOp = {
       {"+", BinaryOperation::Add},
       {"-", BinaryOperation::Subtract},
