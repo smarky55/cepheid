@@ -113,7 +113,7 @@ std::string Generator::genExpression(const Parser::Node* node, std::string_view 
 }
 std::string Generator::genBinaryOperation(
     const Parser::Node* node, std::string_view resultReg) const {
-  const auto* binaryNode = static_cast<const Parser::BinaryOperationNode*>(node);
+  const auto* binaryNode = dynamic_cast<const Parser::BinaryOperationNode*>(node);
   const std::string_view rhsReg = nextRegister(resultReg);
   std::string result = genExpression(binaryNode->lhs(), resultReg);
   result += genExpression(binaryNode->rhs(), rhsReg);
@@ -140,7 +140,7 @@ std::string Generator::genBinaryOperation(
 
 std::string Generator::genUnaryOperation(
     const Parser::Node* node, std::string_view resultReg) const {
-  const auto* unaryNode = static_cast<const Parser::UnaryOperationNode*>(node);
+  const auto* unaryNode = dynamic_cast<const Parser::UnaryOperationNode*>(node);
   std::string result = genExpression(unaryNode->operand(), resultReg);
 
   switch (unaryNode->operation()) {

@@ -11,6 +11,7 @@ enum class UnaryOperation { Negate, Not, Decrement, Increment };
 class UnaryOperationNode : public Node {
 public:
   explicit UnaryOperationNode(UnaryOperation operation);
+  ~UnaryOperationNode() override = default;
 
   [[nodiscard]] UnaryOperation operation() const;
 

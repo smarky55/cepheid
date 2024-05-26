@@ -22,6 +22,7 @@ enum class BinaryOperation {
 class BinaryOperationNode : public Node {
  public:
   explicit BinaryOperationNode(BinaryOperation operation);
+  ~BinaryOperationNode() override = default;
 
   [[nodiscard]] BinaryOperation operation() const;
 

@@ -35,6 +35,7 @@ class Node {
   explicit Node(NodeType type);
   Node(NodeType type, Tokens::Token token);
   Node(NodeType type, NodePtr child);
+  virtual ~Node() = default;
   void addChild(NodePtr child);
 
   [[nodiscard]] NodeType type() const;
