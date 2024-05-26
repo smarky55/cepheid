@@ -37,12 +37,12 @@ class Node {
   Node(NodeType type, NodePtr child);
   void addChild(NodePtr child);
 
-  NodeType type() const;
-  const std::optional<Tokens::Token>& token() const;
+  [[nodiscard]] NodeType type() const;
+  [[nodiscard]] const std::optional<Tokens::Token>& token() const;
 
-  const std::vector<NodePtr>& children() const;
-  
-  const Node* child(NodeType type) const;
+  [[nodiscard]] const std::vector<NodePtr>& children() const;
+
+  [[nodiscard]] const Node* child(NodeType type) const;
 
  private:
   NodeType m_type;

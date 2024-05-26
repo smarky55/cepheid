@@ -5,6 +5,6 @@
 namespace Cepheid {
 class Compiler {
  public:
-  std::string compile(std::string_view src) const;
+  [[nodiscard]] std::string compile(std::string_view src) const;
 };
 }  // namespace Cepheid

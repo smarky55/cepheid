@@ -1,7 +1,10 @@
 #include "Generator.h"
 
+#include <Generator/GenerationException.h>
+#include <Parser/Node/BinaryOperationNode.h>
 #include <Tokeniser/Token.h>
 
+#include <array>
 #include <optional>
 #include <sstream>
 
@@ -9,14 +12,14 @@ using namespace Cepheid::Gen;
 
 using Cepheid::Parser::NodeType;
 
-Cepheid::Gen::Generator::Generator(Parser::NodePtr root) : m_root(std::move(root)) {
+Generator::Generator(Parser::NodePtr root) : m_root(std::move(root)) {
 }
 
-std::string Cepheid::Gen::Generator::generate() {
+std::string Generator::generate() const {
   return genProgram(m_root.get());
 }
 
-std::string Cepheid::Gen::Generator::genProgram(const Parser::Node* node) const {
+std::string Generator::genProgram(const Parser::Node* node) const {
   std::string program = R"(bits 64
 default rel
 
@@ -46,7 +49,7 @@ _entry:
   return program;
 }
 
-std::string Cepheid::Gen::Generator::genScope(const Parser::Node* node) const {
+std::string Generator::genScope(const Parser::Node* node) const {
   std::string body;
   for (const auto& child : node->children()) {
     body += genStatement(child.get());
@@ -54,7 +57,7 @@ std::string Cepheid::Gen::Generator::genScope(const Parser::Node* node) const {
   return body;
 }
 
-std::string Cepheid::Gen::Generator::genStatement(const Parser::Node* node) const {
+std::string Generator::genStatement(const Parser::Node* node) const {
   switch (node->type()) {
     case NodeType::Function:
       return genFunction(node);
@@ -63,16 +66,16 @@ std::string Cepheid::Gen::Generator::genStatement(const Parser::Node* node) cons
     default:
       break;
   }
-  return std::string();
+  return {};
 }
 
-std::string Cepheid::Gen::Generator::genFunction(const Parser::Node* node) const {
+std::string Generator::genFunction(const Parser::Node* node) const {
   std::string body;
 
   // Label and prologue
   const Parser::Node* typeName = node->child(NodeType::TypeName);
   const Parser::Node* ident = typeName->child(NodeType::Identifier);
-  std::string name = "cep_" + ident->token()->value.value();
+  const std::string name = "cep_" + ident->token()->value.value();
   body += name + ":\n";
   body += instruction("push", {"rbp"});
   body += instruction("mov", {"rbp", "rsp"});
@@ -84,10 +87,10 @@ std::string Cepheid::Gen::Generator::genFunction(const Parser::Node* node) const
   return body;
 }
 
-std::string Cepheid::Gen::Generator::genReturn(const Parser::Node* node) const {
+std::string Generator::genReturn(const Parser::Node* node) const {
   std::string ret;
   // Compute expression
-  if (node->children().size()) {
+  if (!node->children().empty()) {
     ret += genExpression(node->children()[0].get(), "rax");
   }
 
@@ -97,52 +100,64 @@ std::string Cepheid::Gen::Generator::genReturn(const Parser::Node* node) const {
   return ret;
 }
 
-std::string Cepheid::Gen::Generator::genExpression(
-    const Parser::Node* node, std::string_view reg) const {
-  return genEqualityOperation(node, reg);
+std::string Generator::genExpression(const Parser::Node* node, std::string_view resultReg) const {
+  switch (node->type()) {
+    case NodeType::BinaryOperation:
+      return genBinaryOperation(node, resultReg);
+    case NodeType::UnaryOperation:
+      return genUnaryOperation(node, resultReg);
+    default:
+      return genBaseOperation(node, resultReg);
+  }
+}
+std::string Generator::genBinaryOperation(
+    const Parser::Node* node, std::string_view resultReg) const {
+  const auto* binaryNode = static_cast<const Parser::BinaryOperationNode*>(node);
+  const std::string_view rhsReg = nextRegister(resultReg);
+  std::string result = genExpression(binaryNode->lhs(), resultReg);
+  result += genExpression(binaryNode->rhs(), rhsReg);
+
+  switch (binaryNode->operation()) {
+    case Parser::BinaryOperation::Add:
+      result += instruction("add", {resultReg, rhsReg});
+      break;
+    case Parser::BinaryOperation::Subtract:
+      result += instruction("sub", {resultReg, rhsReg});
+      break;
+    case Parser::BinaryOperation::Multiply:
+      result += instruction("imul", {resultReg, rhsReg});
+      break;
+    case Parser::BinaryOperation::Divide:
+      result += instruction("idiv", {resultReg, rhsReg});
+      break;
+    default:
+      throw GenerationException("Unhandled binary operation");
+  }
+
+  return result;
 }
 
-std::string Cepheid::Gen::Generator::genEqualityOperation(
-    const Parser::Node* node, std::string_view reg) const {
-  return genComparisonOperation(node, reg);
+std::string Generator::genUnaryOperation(
+    const Parser::Node* node, std::string_view resultReg) const {
+  return genBaseOperation(node, resultReg);
 }
 
-std::string Cepheid::Gen::Generator::genComparisonOperation(
-    const Parser::Node* node, std::string_view reg) const {
-  return genTermOperation(node, reg);
-}
-
-std::string Cepheid::Gen::Generator::genTermOperation(
-    const Parser::Node* node, std::string_view reg) const {
-  return genFactorOperation(node, reg);
-}
-
-std::string Cepheid::Gen::Generator::genFactorOperation(
-    const Parser::Node* node, std::string_view reg) const {
-  return genUnaryOperation(node, reg);
-}
-
-std::string Cepheid::Gen::Generator::genUnaryOperation(
-    const Parser::Node* node, std::string_view reg) const {
-  return genBaseOperation(node, reg);
-}
-
-std::string Cepheid::Gen::Generator::genBaseOperation(
-    const Parser::Node* node, std::string_view reg) const {
+std::string Generator::genBaseOperation(
+    const Parser::Node* node, std::string_view resultReg) const {
   switch (node->type()) {
     case NodeType::IntegerLiteral:
-      return instruction("mov", {reg, node->token()->value.value()});
+      return instruction("mov", {resultReg, node->token()->value.value()});
     default:
       break;
   }
-  return std::string();
+  return {};
 }
 
-std::string Cepheid::Gen::Generator::instruction(
-    std::string_view inst, const std::vector<std::string_view>& args) const {
+std::string Generator::instruction(
+    std::string_view inst, const std::vector<std::string_view>& args) {
   std::stringstream ss;
   ss << "  " << inst;
-  if (args.size()) {
+  if (!args.empty()) {
     ss << " " << args[0];
     for (size_t i = 1; i < args.size(); i++) {
       ss << ", " << args[i];
@@ -150,4 +165,14 @@ std::string Cepheid::Gen::Generator::instruction(
   }
   ss << "\n";
   return ss.str();
+}
+
+std::string_view Generator::nextRegister(std::string_view reg) {
+  static std::array<std::string_view, 12> registers{
+      "rax", "rbx", "rcx", "rdx", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"};
+  auto current = std::ranges::find(registers, reg);
+  if (current == registers.end() || current++ == registers.end()) {
+    throw GenerationException("Unable to get next register");
+  }
+  return *current++;
 }

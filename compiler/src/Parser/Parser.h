@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Parser/ParseNode.h>
+#include <Parser/Node/ParseNode.h>
 #include <Tokeniser/Token.h>
 
 #include <memory>
@@ -25,6 +25,8 @@ class Parser {
   NodePtr parseStatement();
 
   NodePtr parseReturnStatement();
+
+  std::optional<Tokens::Token> parseOperator(const std::vector<std::string_view>& operators);
 
   NodePtr parseExpression();
 
