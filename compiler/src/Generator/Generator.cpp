@@ -1,10 +1,10 @@
 #include "Generator.h"
 
 #include <Generator/GenerationException.h>
-#include <Parser/Node/BinaryOperationNode.h>
-#include <Parser/Node/FunctionNode.h>
-#include <Parser/Node/ScopeNode.h>
-#include <Parser/Node/UnaryOperationNode.h>
+#include <Parser/Node/BinaryOperation.h>
+#include <Parser/Node/Function.h>
+#include <Parser/Node/Scope.h>
+#include <Parser/Node/UnaryOperation.h>
 #include <Tokeniser/Token.h>
 
 #include <array>
@@ -13,16 +13,16 @@
 
 using namespace Cepheid::Gen;
 
-using Cepheid::Parser::NodeType;
+using Cepheid::Parser::Nodes::NodeType;
 
-Generator::Generator(Parser::NodePtr root) : m_root(std::move(root)) {
+Generator::Generator(Parser::Nodes::NodePtr root) : m_root(std::move(root)) {
 }
 
 std::string Generator::generate() const {
   return genProgram(m_root.get());
 }
 
-std::string Generator::genProgram(const Parser::Node* node) const {
+std::string Generator::genProgram(const Parser::Nodes::Node* node) const {
   std::string program = R"(bits 64
 default rel
 
@@ -52,7 +52,7 @@ _entry:
   return program;
 }
 
-std::string Generator::genScope(const Parser::ScopeNode* scope) const {
+std::string Generator::genScope(const Parser::Nodes::Scope* scope, size_t stackOffset) const {
   std::string body;
 
   if (!scope) {
@@ -65,7 +65,7 @@ std::string Generator::genScope(const Parser::ScopeNode* scope) const {
   return body;
 }
 
-std::string Generator::genStatement(const Parser::Node* node) const {
+std::string Generator::genStatement(const Parser::Nodes::Node* node) const {
   switch (node->type()) {
     case NodeType::Function:
       return genFunction(node);
@@ -77,10 +77,10 @@ std::string Generator::genStatement(const Parser::Node* node) const {
   return {};
 }
 
-std::string Generator::genFunction(const Parser::Node* node) const {
+std::string Generator::genFunction(const Parser::Nodes::Node* node) const {
   std::string body;
 
-  const auto function = dynamic_cast<const Parser::FunctionNode*>(node);
+  const auto function = dynamic_cast<const Parser::Nodes::Function*>(node);
   if (!function) {
     throw GenerationException("Expected function!");
   }
@@ -92,13 +92,16 @@ std::string Generator::genFunction(const Parser::Node* node) const {
   body += instruction("mov", {"rbp", "rsp"});
   body += instruction("sub", {"rsp", "32"});
 
+  const size_t stackSpace = 32 + ((function->requiredStackSpace() + 15) / 16) * 16;
+  body += instruction("sub", {"rsp", std::to_string(stackSpace)});
+
   // Scope
-  body += genScope(function->scope());
+  body += genScope(function->scope(), 0);
 
   return body;
 }
 
-std::string Generator::genReturn(const Parser::Node* node) const {
+std::string Generator::genReturn(const Parser::Nodes::Node* node) const {
   std::string ret;
   // Compute expression
   if (!node->children().empty()) {
@@ -112,7 +115,7 @@ std::string Generator::genReturn(const Parser::Node* node) const {
   return ret;
 }
 
-std::string Generator::genExpression(const Parser::Node* node, std::string_view resultReg) const {
+std::string Generator::genExpression(const Parser::Nodes::Node* node, std::string_view resultReg) const {
   switch (node->type()) {
     case NodeType::BinaryOperation:
       return genBinaryOperation(node, resultReg);
@@ -123,23 +126,23 @@ std::string Generator::genExpression(const Parser::Node* node, std::string_view 
   }
 }
 
-std::string Generator::genBinaryOperation(const Parser::Node* node, std::string_view resultReg) const {
-  const auto* binaryNode = dynamic_cast<const Parser::BinaryOperationNode*>(node);
+std::string Generator::genBinaryOperation(const Parser::Nodes::Node* node, std::string_view resultReg) const {
+  const auto* binaryNode = dynamic_cast<const Parser::Nodes::BinaryOperation*>(node);
   const std::string_view rhsReg = nextRegister(resultReg);
   std::string result = genExpression(binaryNode->lhs(), resultReg);
   result += genExpression(binaryNode->rhs(), rhsReg);
 
   switch (binaryNode->operation()) {
-    case Parser::BinaryOperation::Add:
+    case Parser::Nodes::BinaryOperationType::Add:
       result += instruction("add", {resultReg, rhsReg});
       break;
-    case Parser::BinaryOperation::Subtract:
+    case Parser::Nodes::BinaryOperationType::Subtract:
       result += instruction("sub", {resultReg, rhsReg});
       break;
-    case Parser::BinaryOperation::Multiply:
+    case Parser::Nodes::BinaryOperationType::Multiply:
       result += instruction("imul", {resultReg, rhsReg});
       break;
-    case Parser::BinaryOperation::Divide:
+    case Parser::Nodes::BinaryOperationType::Divide:
       // TODO: IDIV needs its LHS in RDX:RAX first and stores the Quotient in RAX and remainder in RDX
 
       // result += instruction("idiv", {resultReg, rhsReg});
@@ -151,21 +154,21 @@ std::string Generator::genBinaryOperation(const Parser::Node* node, std::string_
   return result;
 }
 
-std::string Generator::genUnaryOperation(const Parser::Node* node, std::string_view resultReg) const {
-  const auto* unaryNode = dynamic_cast<const Parser::UnaryOperationNode*>(node);
+std::string Generator::genUnaryOperation(const Parser::Nodes::Node* node, std::string_view resultReg) const {
+  const auto* unaryNode = dynamic_cast<const Parser::Nodes::UnaryOperation*>(node);
   std::string result = genExpression(unaryNode->operand(), resultReg);
 
   switch (unaryNode->operation()) {
-    case Parser::UnaryOperation::Negate:
+    case Parser::Nodes::UnaryOperationType::Negate:
       result += instruction("neg", {resultReg});
       break;
-    case Parser::UnaryOperation::Not:
+    case Parser::Nodes::UnaryOperationType::Not:
       result += instruction("not", {resultReg});
       break;
-    case Parser::UnaryOperation::Decrement:
+    case Parser::Nodes::UnaryOperationType::Decrement:
       result += instruction("dec", {resultReg});
       break;
-    case Parser::UnaryOperation::Increment:
+    case Parser::Nodes::UnaryOperationType::Increment:
       result += instruction("inc", {resultReg});
       break;
     default:
@@ -175,7 +178,7 @@ std::string Generator::genUnaryOperation(const Parser::Node* node, std::string_v
   return result;
 }
 
-std::string Generator::genBaseOperation(const Parser::Node* node, std::string_view resultReg) const {
+std::string Generator::genBaseOperation(const Parser::Nodes::Node* node, std::string_view resultReg) const {
   switch (node->type()) {
     case NodeType::IntegerLiteral:
       return instruction("mov", {resultReg, node->token()->value.value()});

@@ -1,14 +1,15 @@
 #include "Parser.h"
 
-#include "Node/UnaryOperationNode.h"
-
 #include <Parser/ParseException.h>
-#include <Parser/Node/BinaryOperationNode.h>
-#include <Parser/Node/FunctionNode.h>
-#include <Parser/Node/ScopeNode.h>
-#include <Parser/Node/UnaryOperationNode.h>
+#include <Parser/Node/BinaryOperation.h>
+#include <Parser/Node/Function.h>
+#include <Parser/Node/Scope.h>
+#include <Parser/Node/UnaryOperation.h>
+#include <Parser/Node/VariableDeclaration.h>
 
 using namespace Cepheid::Parser;
+
+using Nodes::NodePtr;
 
 using Cepheid::Tokens::Token;
 using Cepheid::Tokens::TokenType;
@@ -21,7 +22,7 @@ NodePtr Parser::parse() {
 }
 
 NodePtr Parser::parseProgram() {
-  auto rootNode = std::make_unique<Node>(NodeType::Program);
+  auto rootNode = std::make_unique<Nodes::Node>(Nodes::NodeType::Program);
   while (peek()) {
     if (auto node = parseStatement()) {
       rootNode->addChild(std::move(node));
@@ -33,8 +34,8 @@ NodePtr Parser::parseProgram() {
 NodePtr Parser::parseTypeName() {
   if (const auto name = checkNextHasValue(TokenType::Identifier)) {
     consume();
-    auto typeName = std::make_unique<Node>(NodeType::TypeName);
-    typeName->addChild(std::make_unique<Node>(NodeType::Identifier, *name));
+    auto typeName = std::make_unique<Nodes::Node>(Nodes::NodeType::TypeName);
+    typeName->addChild(std::make_unique<Nodes::Node>(Nodes::NodeType::Identifier, *name));
     return typeName;
   }
   return nullptr;
@@ -48,10 +49,10 @@ NodePtr Parser::parseFunctionDeclaration() {
 
   const std::optional<Token> name = checkNextHasValue(TokenType::Identifier);
   if (!name || !name->value) {
-      throw ParseException("Expected function identifier");
-    }
+    throw ParseException("Expected function identifier");
+  }
   consume();
-  auto funcNode = std::make_unique<FunctionNode>(name->value.value());
+  auto funcNode = std::make_unique<Nodes::Function>(name->value.value());
 
   {
     const std::optional<Token> openParen = checkNext(TokenType::OpenParen);
@@ -80,10 +81,10 @@ NodePtr Parser::parseFunctionDeclaration() {
     if (!returnType) {
       throw ParseException("Expected return typename");
     }
-    funcNode->setReturnType(std::make_unique<Node>(NodeType::ReturnType, std::move(returnType)));
+    funcNode->setReturnType(std::make_unique<Nodes::Node>(Nodes::NodeType::ReturnType, std::move(returnType)));
   }
 
-  std::unique_ptr<ScopeNode> scope = parseScope();
+  std::unique_ptr<Nodes::Scope> scope = parseScope();
   if (!scope) {
     throw ParseException("Expected function scope");
   }
@@ -92,13 +93,13 @@ NodePtr Parser::parseFunctionDeclaration() {
   return funcNode;
 }
 
-std::unique_ptr<ScopeNode> Parser::parseScope() {
+std::unique_ptr<Nodes::Scope> Parser::parseScope() {
   if (!checkNext(TokenType::OpenBrace)) {
     return nullptr;
   }
   consume();
 
-  auto scopeNode = std::make_unique<ScopeNode>();
+  auto scopeNode = std::make_unique<Nodes::Scope>();
 
   for (auto next = peek(); next && next->type != TokenType::CloseBrace; next = peek()) {
     if (NodePtr statementNode = parseStatement()) {
@@ -119,6 +120,8 @@ NodePtr Parser::parseStatement() {
     return returnNode;
   } else if (NodePtr functionDeclaration = parseFunctionDeclaration()) {
     return functionDeclaration;
+  } else if (NodePtr variableDeclaration = parseVariableDeclaration()) {
+    return variableDeclaration;
   }
   return nullptr;
 }
@@ -129,7 +132,7 @@ NodePtr Parser::parseReturnStatement() {
   }
   consume();
 
-  auto returnNode = Node::make(NodeType::ReturnStatement);
+  auto returnNode = Nodes::Node::make(Nodes::NodeType::ReturnStatement);
 
   if (auto returnValue = parseExpression()) {
     returnNode->addChild(std::move(returnValue));
@@ -141,6 +144,30 @@ NodePtr Parser::parseReturnStatement() {
   consume();
 
   return returnNode;
+}
+
+NodePtr Parser::parseVariableDeclaration() {
+  // We want at least 2 identifiers, one for the type and one for the variable name
+  if (!checkNextHasValue(TokenType::Identifier) && !checkNextHasValue(TokenType::Identifier, std::nullopt, 1)) {
+    return nullptr;
+  }
+
+  NodePtr typeName = parseTypeName();
+  const Token variableName = *consume();
+
+  if (checkNextHasValue(TokenType::Operator, "=")) {
+    NodePtr expressionNode = parseExpression();
+    if (!expressionNode) {
+      throw ParseException("Expected expression in variable declaration");
+    }
+  }
+
+  if (!checkNext(TokenType::Terminator)) {
+    throw ParseException("Expected \";\"");
+  }
+  consume();
+
+  return std::make_unique<Nodes::VariableDeclaration>(std::move(typeName), *variableName.value);
 }
 
 std::optional<Token> Parser::parseOperator(const std::vector<std::string_view>& operators) {
@@ -179,6 +206,10 @@ NodePtr Parser::parseExpression() {
   return parseEqualityOperation();
 }
 
+NodePtr Parser::parserAssignmentOperation() {
+  return parseBinaryOperation({"="}, &Parser::parseEqualityOperation);
+}
+
 NodePtr Parser::parseEqualityOperation() {
   return parseBinaryOperation({"==", "!="}, &Parser::parseComparisonOperation);
 }
@@ -197,9 +228,9 @@ NodePtr Parser::parseFactorOperation() {
 
 NodePtr Parser::parseUnaryOperation() {
   if (const std::optional<Token> opToken = parseOperator({"-", "!", "--", "++"})) {
-    UnaryOperation operation = tokenToUnaryOperation(*opToken);
+    Nodes::UnaryOperationType operation = Nodes::tokenToUnaryOperation(*opToken);
 
-    auto unaryNode = std::make_unique<UnaryOperationNode>(operation);
+    auto unaryNode = std::make_unique<Nodes::UnaryOperation>(operation);
 
     auto child = parseUnaryOperation();
     if (!child) {
@@ -213,7 +244,7 @@ NodePtr Parser::parseUnaryOperation() {
 
 NodePtr Parser::parseBaseOperation() {
   if (checkNextHasValue(TokenType::IntegerLiteral)) {
-    return Node::make(NodeType::IntegerLiteral, *consume());
+    return Nodes::Node::make(Nodes::NodeType::IntegerLiteral, *consume());
   }
   if (checkNext(TokenType::OpenParen)) {
     consume();
@@ -233,10 +264,10 @@ NodePtr Parser::parseBinaryOperation(
 
   while (std::optional<Token> opToken = parseOperator(operators)) {
     // Convert operator token into an operation
-    BinaryOperation operation = tokenToBinaryOperation(*opToken);
+    Nodes::BinaryOperationType operation = Nodes::tokenToBinaryOperation(*opToken);
 
     // Create node for the operation
-    auto binaryOpNode = std::make_unique<BinaryOperationNode>(operation);
+    auto binaryOpNode = std::make_unique<Nodes::BinaryOperation>(operation);
 
     // Add the existing as the left hand side
     binaryOpNode->setLHS(std::move(operationNode));

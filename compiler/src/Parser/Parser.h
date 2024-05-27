@@ -7,46 +7,54 @@
 #include <vector>
 
 namespace Cepheid::Parser {
-class ScopeNode;
+namespace Nodes {
+class Scope;
+class VariableDeclaration;
+}  // namespace Nodes
 
 class Parser {
  public:
   explicit Parser(const std::vector<Tokens::Token>& tokens);
 
-  [[nodiscard]] NodePtr parse();
+  [[nodiscard]] Nodes::NodePtr parse();
 
  private:
-  NodePtr parseProgram();
+  Nodes::NodePtr parseProgram();
 
-  NodePtr parseTypeName();
+  Nodes::NodePtr parseTypeName();
 
-  NodePtr parseFunctionDeclaration();
+  Nodes::NodePtr parseFunctionDeclaration();
 
-  std::unique_ptr<ScopeNode> parseScope();
+  std::unique_ptr<Nodes::Scope> parseScope();
 
-  NodePtr parseStatement();
+  Nodes::NodePtr parseStatement();
 
-  NodePtr parseReturnStatement();
+  Nodes::NodePtr parseReturnStatement();
+
+  Nodes::NodePtr parseVariableDeclaration();
 
   std::optional<Tokens::Token> parseOperator(const std::vector<std::string_view>& operators);
 
-  NodePtr parseExpression();
+  Nodes::NodePtr parseExpression();
 
-  NodePtr parseEqualityOperation();
+  Nodes::NodePtr parserAssignmentOperation();
 
-  NodePtr parseComparisonOperation();
+  Nodes::NodePtr parseEqualityOperation();
 
-  NodePtr parseTermOperation();
+  Nodes::NodePtr parseComparisonOperation();
 
-  NodePtr parseFactorOperation();
+  Nodes::NodePtr parseTermOperation();
 
-  NodePtr parseUnaryOperation();
+  Nodes::NodePtr parseFactorOperation();
 
-  NodePtr parseBaseOperation();
+  Nodes::NodePtr parseUnaryOperation();
 
-  using BinaryOperationParser = NodePtr (Parser::*)();
+  Nodes::NodePtr parseBaseOperation();
 
-  NodePtr parseBinaryOperation(const std::vector<std::string_view>& operators, BinaryOperationParser precedentFunc);
+  using BinaryOperationParser = Nodes::NodePtr (Parser::*)();
+
+  Nodes::NodePtr parseBinaryOperation(
+      const std::vector<std::string_view>& operators, BinaryOperationParser precedentFunc);
 
   [[nodiscard]] std::optional<Tokens::Token> checkNext(Tokens::TokenType type, size_t offset = 0) const;
   [[nodiscard]] std::optional<Tokens::Token> checkNextHasValue(

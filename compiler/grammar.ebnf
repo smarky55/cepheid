@@ -4,14 +4,22 @@ program
 statement
   = function_declaration
   | return_statement
-  | expression_statement;
+  | variable_declaration_statement
+  | expression_statement
+  | scope;
 
 function_declaration 
-  = "func" identifier "(" [ parameter_declaration { "," parameter_declaration } ] ")" "->" identifier 
-    "{" { statement } "}";
+  = "func" identifier "(" [ variable_declaration { "," variable_declaration } ] ")" "->" identifier 
+    scope;
 
-parameter_declaration
+scope
+  = "{" { statement } "}";
+
+variable_declaration
   = identifier identifier;
+
+variable_declaration_statement
+  = variable_declaration terminator;
 
 return_statement
  = "return" expression terminator;
@@ -20,15 +28,14 @@ expression_statement
   = expression terminator;
 
 expression
-  = assignment
-  | equality_operation
+  = assignment_operation
   | function_call;
-
-assignment
-  = expression [arithmetic_operator] "=" expression;
 
 function_call
   = identifier "(" [ expression { "," expression } ] ")";
+
+assignment_operation
+  = equality_operation [arithmetic_operator] "=" equality_operation;
 
 equality_operation
   = comparison_operation { ( "==" | "!=" ) comparison_operation };

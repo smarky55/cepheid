@@ -1,6 +1,6 @@
 #include "ParseNode.h"
 
-using namespace Cepheid::Parser;
+using namespace Cepheid::Parser::Nodes ;
 
 using Cepheid::Tokens::Token;
 

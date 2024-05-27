@@ -7,7 +7,7 @@
 #include <string_view>
 #include <vector>
 
-namespace Cepheid::Parser {
+namespace Cepheid::Parser::Nodes {
 enum class NodeType {
   Program,
   Identifier,
