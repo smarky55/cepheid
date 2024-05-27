@@ -5,8 +5,6 @@
 #include <Parser/ParseException.h>
 #include <Parser/Node/BinaryOperationNode.h>
 
-#include <array>
-
 using namespace Cepheid::Parser;
 
 using Cepheid::Tokens::Token;
@@ -30,7 +28,7 @@ NodePtr Parser::parseProgram() {
 }
 
 NodePtr Parser::parseTypeName() {
-  if (auto name = checkNextHasValue(TokenType::Identifier)) {
+  if (const auto name = checkNextHasValue(TokenType::Identifier)) {
     consume();
     auto typeName = std::make_unique<Node>(NodeType::TypeName);
     typeName->addChild(std::make_unique<Node>(NodeType::Identifier, *name));
@@ -56,7 +54,7 @@ NodePtr Parser::parseFunctionDeclaration() {
   }
 
   {
-    std::optional<Token> openParen = checkNext(TokenType::OpenParen);
+    const std::optional<Token> openParen = checkNext(TokenType::OpenParen);
     if (!openParen) {
       throw ParseException("Expected \"(\" for function parameter list");
     }
@@ -66,13 +64,13 @@ NodePtr Parser::parseFunctionDeclaration() {
     while (!checkNext(TokenType::CloseParen)) {
       // parseParameterDefinition
     }
-    if (auto closeParen = consume(); !closeParen || closeParen->type != TokenType::CloseParen) {
+    if (const auto closeParen = consume(); !closeParen || closeParen->type != TokenType::CloseParen) {
       throw ParseException("Expected \")\" after function parameter list");
     }
   }
 
   {
-    std::optional<Token> returnsOperator = checkNextCompound(TokenType::Operator, {"-", ">"});
+    const std::optional<Token> returnsOperator = checkNextCompound(TokenType::Operator, {"-", ">"});
     if (!returnsOperator) {
       throw ParseException("Expected \"->\" return type indicator");
     }
@@ -157,7 +155,7 @@ std::optional<Token> Parser::parseOperator(const std::vector<std::string_view>& 
   std::optional<Token> result;
   for (const auto& op : operators) {
     std::optional<Token> match;
-    for (int i = 0; i < op.size(); i++) {
+    for (size_t i = 0; i < op.size(); i++) {
       if (auto next = checkNextHasValue(TokenType::Operator, std::string(1, op[i]), i)) {
         match = addTokens(match, next);
       } else {
@@ -170,8 +168,8 @@ std::optional<Token> Parser::parseOperator(const std::vector<std::string_view>& 
     }
   }
 
-  if(result) {
-    consume(result->value->size()-1);
+  if (result) {
+    consume(result->value->size() - 1);
   }
 
   return result;
@@ -182,88 +180,19 @@ NodePtr Parser::parseExpression() {
 }
 
 NodePtr Parser::parseEqualityOperation() {
-  return parseComparisonOperation();
+  return parseBinaryOperation({"==", "!="}, &Parser::parseComparisonOperation);
 }
 
 NodePtr Parser::parseComparisonOperation() {
-  NodePtr operationNode = parseTermOperation();
-
-  while (std::optional<Token> opToken = parseOperator({">", "<", ">=", "<="})) {
-    // Convert operator token into an operation
-    BinaryOperation operation = tokenToBinaryOperation(*opToken);
-
-    // Create node for the operation
-    auto binaryOpNode = std::make_unique<BinaryOperationNode>(operation);
-
-    // Add the existing as the left hand side
-    binaryOpNode->setLHS(std::move(operationNode));
-
-    // Parse the right hand side
-    NodePtr rhs = parseTermOperation();
-    if (!rhs) {
-      throw ParseException("Expected right hand expression");
-    }
-    binaryOpNode->setRHS(std::move(rhs));
-
-    // Store as operationNode for the next step
-    operationNode = std::move(binaryOpNode);
-  }
-
-  return operationNode;
+  return parseBinaryOperation({">", "<", ">=", "<="}, &Parser::parseTermOperation);
 }
 
 NodePtr Parser::parseTermOperation() {
-  NodePtr operationNode = parseFactorOperation();
-
-  while (std::optional<Token> opToken = parseOperator({"+", "-"})) {
-    // Convert operator token into an operation
-    BinaryOperation operation = tokenToBinaryOperation(*opToken);
-
-    // Create node for the operation
-    auto binaryOpNode = std::make_unique<BinaryOperationNode>(operation);
-
-    // Add the existing as the left hand side
-    binaryOpNode->setLHS(std::move(operationNode));
-
-    // Parse the right hand side
-    NodePtr rhs = parseFactorOperation();
-    if (!rhs) {
-      throw ParseException("Expected right hand expression");
-    }
-    binaryOpNode->setRHS(std::move(rhs));
-
-    // Store as operationNode for the next step
-    operationNode = std::move(binaryOpNode);
-  }
-
-  return operationNode;
+  return parseBinaryOperation({"+", "-"}, &Parser::parseFactorOperation);
 }
 
 NodePtr Parser::parseFactorOperation() {
-  NodePtr operationNode = parseUnaryOperation();
-
-  while (std::optional<Token> opToken = parseOperator({"*", "/"})) {
-    // Convert operator token into an operation
-    BinaryOperation operation = tokenToBinaryOperation(*opToken);
-
-    // Create node for the operation
-    auto binaryOpNode = std::make_unique<BinaryOperationNode>(operation);
-
-    // Add the existing as the left hand side
-    binaryOpNode->setLHS(std::move(operationNode));
-
-    // Parse the right hand side
-    NodePtr rhs = parseUnaryOperation();
-    if (!rhs) {
-      throw ParseException("Expected right hand expression");
-    }
-    binaryOpNode->setRHS(std::move(rhs));
-
-    // Store as operationNode for the next step
-    operationNode = std::move(binaryOpNode);
-  }
-
-  return operationNode;
+  return parseBinaryOperation({"*", "/"}, &Parser::parseUnaryOperation);
 }
 
 NodePtr Parser::parseUnaryOperation() {
@@ -298,31 +227,58 @@ NodePtr Parser::parseBaseOperation() {
   return {};
 }
 
-std::optional<Token> Parser::checkNext(TokenType type, size_t offset) {
+NodePtr Parser::parseBinaryOperation(
+    const std::vector<std::string_view>& operators, BinaryOperationParser precedentFunc) {
+  NodePtr operationNode = std::invoke(precedentFunc, this);
+
+  while (std::optional<Token> opToken = parseOperator(operators)) {
+    // Convert operator token into an operation
+    BinaryOperation operation = tokenToBinaryOperation(*opToken);
+
+    // Create node for the operation
+    auto binaryOpNode = std::make_unique<BinaryOperationNode>(operation);
+
+    // Add the existing as the left hand side
+    binaryOpNode->setLHS(std::move(operationNode));
+
+    // Parse the right hand side
+    NodePtr rhs = std::invoke(precedentFunc, this);
+    if (!rhs) {
+      throw ParseException("Expected right hand expression");
+    }
+    binaryOpNode->setRHS(std::move(rhs));
+
+    // Store as operationNode for the next step
+    operationNode = std::move(binaryOpNode);
+  }
+
+  return operationNode;
+}
+
+std::optional<Token> Parser::checkNext(TokenType type, size_t offset) const {
   std::optional<Token> next = peek(offset);
   return next && next->type == type ? next : std::nullopt;
 }
 
 std::optional<Token> Parser::checkNextHasValue(
-    TokenType type, std::optional<std::string> value, size_t offset) {
+    TokenType type, const std::optional<std::string>& value, size_t offset) const {
   std::optional<Token> next = peek(offset);
-  bool isType = next && next->type == type;
-  bool containsAnyValue = next && next->value;
-  bool containsSpecificValue = containsAnyValue && value == next->value;
-  bool containsValue = value ? containsSpecificValue : containsAnyValue;
+  const bool isType = next && next->type == type;
+  const bool containsAnyValue = next && next->value;
+  const bool containsSpecificValue = containsAnyValue && value == next->value;
+  const bool containsValue = value ? containsSpecificValue : containsAnyValue;
   return isType && containsValue ? next : std::nullopt;
 }
 
-std::optional<Token> Parser::checkNextCompound(
-    TokenType type, const std::vector<std::string>& sequence) {
+std::optional<Token> Parser::checkNextCompound(TokenType type, const std::vector<std::string>& sequence) const {
   std::optional<Token> ret;
 
   for (size_t i = 0; i < sequence.size(); i++) {
-    if (auto token = checkNextHasValue(type, sequence[i], i)) {
-      if (!ret) {
-        ret = token;
-      } else {
+    if (const auto token = checkNextHasValue(type, sequence[i], i)) {
+      if (ret && ret->value) {
         ret->value.value() += sequence[i];
+      } else {
+        ret = token;
       }
     } else {
       return std::nullopt;

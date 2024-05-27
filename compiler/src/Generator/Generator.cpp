@@ -92,7 +92,8 @@ std::string Generator::genReturn(const Parser::Node* node) const {
   std::string ret;
   // Compute expression
   if (!node->children().empty()) {
-    ret += genExpression(node->children()[0].get(), "rax");
+    ret += genExpression(node->children()[0].get(), "rbx");
+    ret += instruction("mov", {"rax", "rbx"});
   }
 
   // Do the return
@@ -111,8 +112,8 @@ std::string Generator::genExpression(const Parser::Node* node, std::string_view 
       return genBaseOperation(node, resultReg);
   }
 }
-std::string Generator::genBinaryOperation(
-    const Parser::Node* node, std::string_view resultReg) const {
+
+std::string Generator::genBinaryOperation(const Parser::Node* node, std::string_view resultReg) const {
   const auto* binaryNode = dynamic_cast<const Parser::BinaryOperationNode*>(node);
   const std::string_view rhsReg = nextRegister(resultReg);
   std::string result = genExpression(binaryNode->lhs(), resultReg);
@@ -129,8 +130,10 @@ std::string Generator::genBinaryOperation(
       result += instruction("imul", {resultReg, rhsReg});
       break;
     case Parser::BinaryOperation::Divide:
-      result += instruction("idiv", {resultReg, rhsReg});
-      break;
+      // TODO: IDIV needs its LHS in RDX:RAX first and stores the Quotient in RAX and remainder in RDX
+
+      // result += instruction("idiv", {resultReg, rhsReg});
+      // break;
     default:
       throw GenerationException("Unhandled binary operation");
   }
@@ -138,8 +141,7 @@ std::string Generator::genBinaryOperation(
   return result;
 }
 
-std::string Generator::genUnaryOperation(
-    const Parser::Node* node, std::string_view resultReg) const {
+std::string Generator::genUnaryOperation(const Parser::Node* node, std::string_view resultReg) const {
   const auto* unaryNode = dynamic_cast<const Parser::UnaryOperationNode*>(node);
   std::string result = genExpression(unaryNode->operand(), resultReg);
 
@@ -157,14 +159,13 @@ std::string Generator::genUnaryOperation(
       result += instruction("inc", {resultReg});
       break;
     default:
-      throw GenerationException("Unexpected unary operation");
+      throw GenerationException("Unhandled unary operation");
   }
 
   return result;
 }
 
-std::string Generator::genBaseOperation(
-    const Parser::Node* node, std::string_view resultReg) const {
+std::string Generator::genBaseOperation(const Parser::Node* node, std::string_view resultReg) const {
   switch (node->type()) {
     case NodeType::IntegerLiteral:
       return instruction("mov", {resultReg, node->token()->value.value()});
@@ -174,8 +175,7 @@ std::string Generator::genBaseOperation(
   return {};
 }
 
-std::string Generator::instruction(
-    std::string_view inst, const std::vector<std::string_view>& args) {
+std::string Generator::instruction(std::string_view inst, const std::vector<std::string_view>& args) {
   std::stringstream ss;
   ss << "  " << inst;
   if (!args.empty()) {

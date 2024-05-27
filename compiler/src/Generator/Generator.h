@@ -17,17 +17,12 @@ class Generator {
   [[nodiscard]] std::string genFunction(const Parser::Node* node) const;
   [[nodiscard]] std::string genReturn(const Parser::Node* node) const;
 
-  [[nodiscard]] std::string genExpression(
-      const Parser::Node* node, std::string_view resultReg) const;
-  [[nodiscard]] std::string genBinaryOperation(
-      const Parser::Node* node, std::string_view resultReg) const;
-  [[nodiscard]] std::string genUnaryOperation(
-      const Parser::Node* node, std::string_view resultReg) const;
-  [[nodiscard]] std::string genBaseOperation(
-      const Parser::Node* node, std::string_view resultReg) const;
+  [[nodiscard]] std::string genExpression(const Parser::Node* node, std::string_view resultReg) const;
+  [[nodiscard]] std::string genBinaryOperation(const Parser::Node* node, std::string_view resultReg) const;
+  [[nodiscard]] std::string genUnaryOperation(const Parser::Node* node, std::string_view resultReg) const;
+  [[nodiscard]] std::string genBaseOperation(const Parser::Node* node, std::string_view resultReg) const;
 
-  [[nodiscard]] static std::string instruction(
-      std::string_view inst, const std::vector<std::string_view>& args);
+  [[nodiscard]] static std::string instruction(std::string_view inst, const std::vector<std::string_view>& args);
 
   static std::string_view nextRegister(std::string_view reg);
 

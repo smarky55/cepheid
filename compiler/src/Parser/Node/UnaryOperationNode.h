@@ -9,7 +9,7 @@ enum class UnaryOperation { Negate, Not, Decrement, Increment };
 [[nodiscard]] UnaryOperation tokenToUnaryOperation(const Tokens::Token& token);
 
 class UnaryOperationNode : public Node {
-public:
+ public:
   explicit UnaryOperationNode(UnaryOperation operation);
   ~UnaryOperationNode() override = default;
 
@@ -18,7 +18,7 @@ public:
   void setOperand(NodePtr operand);
   [[nodiscard]] Node* operand() const;
 
-private:
+ private:
   UnaryOperation m_operation;
   NodePtr m_operand;
 };

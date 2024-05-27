@@ -64,8 +64,7 @@ std::optional<Token> Tokeniser::readTokenOrKeyword() {
 
   bool keyword = isKeyword(val);
 
-  return std::optional<Token>(
-      std::in_place, keyword ? TokenType::Keyword : TokenType::Identifier, val, startLocation);
+  return std::optional<Token>(std::in_place, keyword ? TokenType::Keyword : TokenType::Identifier, val, startLocation);
 }
 
 std::optional<Token> Tokeniser::readTerminator() {
@@ -85,8 +84,7 @@ std::optional<Token> Tokeniser::readOperator() {
   }
   SourceLocation startLocation = m_currentLocation;
 
-  return std::optional<Token>(
-      std::in_place, TokenType::Operator, std::string(1, *consume()), startLocation);
+  return std::optional<Token>(std::in_place, TokenType::Operator, std::string(1, *consume()), startLocation);
 }
 
 std::optional<Token> Tokeniser::readDelimiter() {

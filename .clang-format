@@ -7,6 +7,7 @@ AllowShortBlocksOnASingleLine: false
 AllowShortFunctionsOnASingleLine: false
 BinPackArguments: false
 BinPackParameters: false
-ColumnLimit: 100
+ColumnLimit: 120
+KeepEmptyLinesAtTheStartOfBlocks: false
 SortIncludes:    false
 ...

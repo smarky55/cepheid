@@ -42,12 +42,16 @@ class Parser {
 
   NodePtr parseBaseOperation();
 
-  std::optional<Tokens::Token> checkNext(Tokens::TokenType type, size_t offset = 0);
-  std::optional<Tokens::Token> checkNextHasValue(
-      Tokens::TokenType type, std::optional<std::string> value = std::nullopt, size_t offset = 0);
-  std::optional<Tokens::Token> checkNextCompound(
-      Tokens::TokenType type, const std::vector<std::string>& sequence);
-  std::optional<Tokens::Token> peek(size_t offset = 0) const;
+  using BinaryOperationParser = NodePtr (Parser::*)();
+
+  NodePtr parseBinaryOperation(const std::vector<std::string_view>& operators, BinaryOperationParser precedentFunc);
+
+  [[nodiscard]] std::optional<Tokens::Token> checkNext(Tokens::TokenType type, size_t offset = 0) const;
+  [[nodiscard]] std::optional<Tokens::Token> checkNextHasValue(
+      Tokens::TokenType type, const std::optional<std::string>& value = std::nullopt, size_t offset = 0) const;
+  [[nodiscard]] std::optional<Tokens::Token> checkNextCompound(
+      Tokens::TokenType type, const std::vector<std::string>& sequence) const;
+  [[nodiscard]] std::optional<Tokens::Token> peek(size_t offset = 0) const;
   std::optional<Tokens::Token> consume(size_t offset = 0);
 
   size_t m_cursor = 0;

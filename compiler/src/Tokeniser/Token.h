@@ -29,4 +29,4 @@ struct Token {
   std::optional<std::string> value;
   SourceLocation location;
 };
-}  // namespace Cepheid::Tokeniser
+}  // namespace Cepheid::Tokens
