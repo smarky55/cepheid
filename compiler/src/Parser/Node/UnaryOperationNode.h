@@ -16,7 +16,7 @@ class UnaryOperationNode : public Node {
   [[nodiscard]] UnaryOperation operation() const;
 
   void setOperand(NodePtr operand);
-  [[nodiscard]] Node* operand() const;
+  [[nodiscard]] const Node* operand() const;
 
  private:
   UnaryOperation m_operation;

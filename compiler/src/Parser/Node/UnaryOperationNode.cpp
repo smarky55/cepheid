@@ -25,6 +25,6 @@ void UnaryOperationNode::setOperand(NodePtr operand) {
   m_operand = std::move(operand);
 }
 
-Node* UnaryOperationNode::operand() const {
+const Node* UnaryOperationNode::operand() const {
   return m_operand.get();
 }

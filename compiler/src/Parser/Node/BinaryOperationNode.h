@@ -27,10 +27,10 @@ class BinaryOperationNode : public Node {
   [[nodiscard]] BinaryOperation operation() const;
 
   void setLHS(NodePtr lhsNode);
-  [[nodiscard]] Node* lhs() const;
+  [[nodiscard]] const Node* lhs() const;
 
   void setRHS(NodePtr rhsNode);
-  [[nodiscard]] Node* rhs() const;
+  [[nodiscard]] const Node* rhs() const;
 
  private:
   BinaryOperation m_operation;

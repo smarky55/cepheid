@@ -2,6 +2,10 @@
 
 #include <Parser/Node/ParseNode.h>
 
+namespace Cepheid::Parser {
+class ScopeNode;
+}
+
 namespace Cepheid::Gen {
 class Generator {
  public:
@@ -11,7 +15,7 @@ class Generator {
 
  private:
   [[nodiscard]] std::string genProgram(const Parser::Node* node) const;
-  [[nodiscard]] std::string genScope(const Parser::Node* node) const;
+  [[nodiscard]] std::string genScope(const Parser::ScopeNode* scope) const;
   [[nodiscard]] std::string genStatement(const Parser::Node* node) const;
 
   [[nodiscard]] std::string genFunction(const Parser::Node* node) const;

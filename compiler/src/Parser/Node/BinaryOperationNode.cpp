@@ -30,7 +30,7 @@ void BinaryOperationNode::setLHS(NodePtr lhsNode) {
   m_lhsNode = std::move(lhsNode);
 }
 
-Node* BinaryOperationNode::lhs() const {
+const Node* BinaryOperationNode::lhs() const {
   return m_lhsNode.get();
 }
 
@@ -38,6 +38,6 @@ void BinaryOperationNode::setRHS(NodePtr rhsNode) {
   m_rhsNode = std::move(rhsNode);
 }
 
-Node* BinaryOperationNode::rhs() const {
+const Node* BinaryOperationNode::rhs() const {
   return m_rhsNode.get();
 }

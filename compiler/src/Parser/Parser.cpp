@@ -4,6 +4,9 @@
 
 #include <Parser/ParseException.h>
 #include <Parser/Node/BinaryOperationNode.h>
+#include <Parser/Node/FunctionNode.h>
+#include <Parser/Node/ScopeNode.h>
+#include <Parser/Node/UnaryOperationNode.h>
 
 using namespace Cepheid::Parser;
 
@@ -43,15 +46,12 @@ NodePtr Parser::parseFunctionDeclaration() {
   }
   consume();
 
-  auto funcNode = std::make_unique<Node>(NodeType::Function);
-
-  {
-    NodePtr functionName = parseTypeName();
-    if (!functionName) {
+  const std::optional<Token> name = checkNextHasValue(TokenType::Identifier);
+  if (!name || !name->value) {
       throw ParseException("Expected function identifier");
     }
-    funcNode->addChild(std::move(functionName));
-  }
+  consume();
+  auto funcNode = std::make_unique<FunctionNode>(name->value.value());
 
   {
     const std::optional<Token> openParen = checkNext(TokenType::OpenParen);
@@ -62,7 +62,7 @@ NodePtr Parser::parseFunctionDeclaration() {
 
     // Loop parsing parameters while not close paren
     while (!checkNext(TokenType::CloseParen)) {
-      // parseParameterDefinition
+      // TODO: parseParameterDefinition
     }
     if (const auto closeParen = consume(); !closeParen || closeParen->type != TokenType::CloseParen) {
       throw ParseException("Expected \")\" after function parameter list");
@@ -80,29 +80,29 @@ NodePtr Parser::parseFunctionDeclaration() {
     if (!returnType) {
       throw ParseException("Expected return typename");
     }
-    funcNode->addChild(std::make_unique<Node>(NodeType::ReturnType, std::move(returnType)));
+    funcNode->setReturnType(std::make_unique<Node>(NodeType::ReturnType, std::move(returnType)));
   }
 
-  NodePtr scope = parseScope();
+  std::unique_ptr<ScopeNode> scope = parseScope();
   if (!scope) {
     throw ParseException("Expected function scope");
   }
-  funcNode->addChild(std::move(scope));
+  funcNode->setScope(std::move(scope));
 
   return funcNode;
 }
 
-NodePtr Parser::parseScope() {
+std::unique_ptr<ScopeNode> Parser::parseScope() {
   if (!checkNext(TokenType::OpenBrace)) {
     return nullptr;
   }
   consume();
 
-  auto scopeNode = std::make_unique<Node>(NodeType::Scope);
+  auto scopeNode = std::make_unique<ScopeNode>();
 
   for (auto next = peek(); next && next->type != TokenType::CloseBrace; next = peek()) {
     if (NodePtr statementNode = parseStatement()) {
-      scopeNode->addChild(std::move(statementNode));
+      scopeNode->addStatement(std::move(statementNode));
     }
   }
 

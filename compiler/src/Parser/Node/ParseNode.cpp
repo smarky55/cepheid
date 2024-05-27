@@ -22,15 +22,15 @@ NodeType Node::type() const {
   return m_type;
 }
 
-const std::optional<Token>& Cepheid::Parser::Node::token() const {
+const std::optional<Token>& Node::token() const {
   return m_token;
 }
 
-const std::vector<NodePtr>& Cepheid::Parser::Node::children() const {
+const std::vector<NodePtr>& Node::children() const {
   return m_children;
 }
 
-const Node* Cepheid::Parser::Node::child(NodeType type) const {
+const Node* Node::child(NodeType type) const {
   for (const auto& node : m_children) {
     if (node->type() == type) {
       return node.get();

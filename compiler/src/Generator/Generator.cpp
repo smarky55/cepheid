@@ -2,6 +2,8 @@
 
 #include <Generator/GenerationException.h>
 #include <Parser/Node/BinaryOperationNode.h>
+#include <Parser/Node/FunctionNode.h>
+#include <Parser/Node/ScopeNode.h>
 #include <Parser/Node/UnaryOperationNode.h>
 #include <Tokeniser/Token.h>
 
@@ -50,9 +52,14 @@ _entry:
   return program;
 }
 
-std::string Generator::genScope(const Parser::Node* node) const {
+std::string Generator::genScope(const Parser::ScopeNode* scope) const {
   std::string body;
-  for (const auto& child : node->children()) {
+
+  if (!scope) {
+    throw GenerationException("Expected scope!");
+  }
+
+  for (const auto& child : scope->statements()) {
     body += genStatement(child.get());
   }
   return body;
@@ -73,17 +80,20 @@ std::string Generator::genStatement(const Parser::Node* node) const {
 std::string Generator::genFunction(const Parser::Node* node) const {
   std::string body;
 
+  const auto function = dynamic_cast<const Parser::FunctionNode*>(node);
+  if (!function) {
+    throw GenerationException("Expected function!");
+  }
+
   // Label and prologue
-  const Parser::Node* typeName = node->child(NodeType::TypeName);
-  const Parser::Node* ident = typeName->child(NodeType::Identifier);
-  const std::string name = "cep_" + ident->token()->value.value();
+  const std::string name = "cep_" + function->name();
   body += name + ":\n";
   body += instruction("push", {"rbp"});
   body += instruction("mov", {"rbp", "rsp"});
   body += instruction("sub", {"rsp", "32"});
 
   // Scope
-  body += genScope(node->child(NodeType::Scope));
+  body += genScope(function->scope());
 
   return body;
 }

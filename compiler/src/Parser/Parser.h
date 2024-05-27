@@ -7,6 +7,8 @@
 #include <vector>
 
 namespace Cepheid::Parser {
+class ScopeNode;
+
 class Parser {
  public:
   explicit Parser(const std::vector<Tokens::Token>& tokens);
@@ -20,7 +22,7 @@ class Parser {
 
   NodePtr parseFunctionDeclaration();
 
-  NodePtr parseScope();
+  std::unique_ptr<ScopeNode> parseScope();
 
   NodePtr parseStatement();
 
