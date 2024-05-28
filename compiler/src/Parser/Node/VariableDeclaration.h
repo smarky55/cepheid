@@ -11,9 +11,13 @@ class VariableDeclaration : public Node {
   [[nodiscard]] const Node* typeName() const;
   [[nodiscard]] const std::string& name() const;
 
+  void setExpression(NodePtr expression);
+  [[nodiscard]] const Node* expression() const;
+
  private:
   NodePtr m_typeName;
   std::string m_name;
+  NodePtr m_expression;
 };
 
 }  // namespace Cepheid::Parser::Nodes

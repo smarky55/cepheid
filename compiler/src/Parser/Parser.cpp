@@ -155,11 +155,14 @@ NodePtr Parser::parseVariableDeclaration() {
   NodePtr typeName = parseTypeName();
   const Token variableName = *consume();
 
+  auto declaration = std::make_unique<Nodes::VariableDeclaration>(std::move(typeName), *variableName.value);
   if (checkNextHasValue(TokenType::Operator, "=")) {
+    consume();
     NodePtr expressionNode = parseExpression();
     if (!expressionNode) {
       throw ParseException("Expected expression in variable declaration");
     }
+    declaration->setExpression(std::move(expressionNode));
   }
 
   if (!checkNext(TokenType::Terminator)) {
@@ -167,7 +170,7 @@ NodePtr Parser::parseVariableDeclaration() {
   }
   consume();
 
-  return std::make_unique<Nodes::VariableDeclaration>(std::move(typeName), *variableName.value);
+  return declaration;
 }
 
 std::optional<Token> Parser::parseOperator(const std::vector<std::string_view>& operators) {
@@ -245,6 +248,9 @@ NodePtr Parser::parseUnaryOperation() {
 NodePtr Parser::parseBaseOperation() {
   if (checkNextHasValue(TokenType::IntegerLiteral)) {
     return Nodes::Node::make(Nodes::NodeType::IntegerLiteral, *consume());
+  }
+  if (checkNextHasValue(TokenType::Identifier)) {
+    return Nodes::Node::make(Nodes::NodeType::Identifier, *consume());
   }
   if (checkNext(TokenType::OpenParen)) {
     consume();

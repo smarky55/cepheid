@@ -11,3 +11,11 @@ const Cepheid::Parser::Nodes::Node* Cepheid::Parser::Nodes::VariableDeclaration:
 const std::string& Cepheid::Parser::Nodes::VariableDeclaration::name() const {
   return m_name;
 }
+
+void Cepheid::Parser::Nodes::VariableDeclaration::setExpression(NodePtr expression) {
+  m_expression = std::move(expression);
+}
+
+const Cepheid::Parser::Nodes::Node* Cepheid::Parser::Nodes::VariableDeclaration::expression() const {
+  return m_expression.get();
+}

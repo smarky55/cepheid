@@ -25,7 +25,7 @@ const std::vector<NodePtr>& Scope::statements() const {
 size_t Scope::requiredStackSpace() const {
   size_t localsSize = 0;
   for (const VariableDeclaration* local : m_locals) {
-    localsSize += 4;  // TODO: Not everything is 4 bytes
+    localsSize += 8;  // TODO: Not everything is 8 bytes
   }
 
   size_t scopesMax = 0;
