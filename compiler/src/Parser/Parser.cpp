@@ -18,11 +18,11 @@ Parser::Parser(const std::vector<Token>& tokens) : m_tokens(tokens) {
 }
 
 NodePtr Parser::parse() {
-  return parseProgram();
+  return parseModule();
 }
 
-NodePtr Parser::parseProgram() {
-  auto rootNode = std::make_unique<Nodes::Node>(Nodes::NodeType::Program);
+NodePtr Parser::parseModule() {
+  auto rootNode = std::make_unique<Nodes::Node>(Nodes::NodeType::Module);
   while (peek()) {
     if (auto node = parseStatement()) {
       rootNode->addChild(std::move(node));

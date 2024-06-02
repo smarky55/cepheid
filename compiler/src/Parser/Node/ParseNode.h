@@ -9,7 +9,7 @@
 
 namespace Cepheid::Parser::Nodes {
 enum class NodeType {
-  Program,
+  Module,
   Identifier,
   TypeName,
   Function,

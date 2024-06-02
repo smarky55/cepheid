@@ -19,7 +19,7 @@ class Parser {
   [[nodiscard]] Nodes::NodePtr parse();
 
  private:
-  Nodes::NodePtr parseProgram();
+  Nodes::NodePtr parseModule();
 
   Nodes::NodePtr parseTypeName();
 
