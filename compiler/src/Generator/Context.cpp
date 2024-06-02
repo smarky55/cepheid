@@ -1,47 +1,83 @@
 #include "Context.h"
 
-#include <Parser/Node/Scope.h>
-#include <ranges>
+#include <Generator/GenerationException.h>
 #include <Parser/Node/VariableDeclaration.h>
+
+#include <ranges>
 
 using namespace Cepheid::Gen;
 
 Context::Context() : m_impl(std::make_unique<ContextImpl>()) {
+  m_primitiveTypes = {{"i8", {1, 1}}, {"i16", {2, 2}}, {"i32", {4, 4}}, {"i64", {8, 8}}};
 }
 
 void Context::push() {
   auto newContext = std::make_unique<ContextImpl>();
-  newContext->m_stackOffset = m_impl->m_stackOffset;
-  for (const auto& [size, offset] : m_impl->m_variables | std::views::values) {
-    newContext->m_stackOffset += size;
+  newContext->stackOffset = m_impl->stackOffset;
+  for (const auto& [size, offset] : m_impl->variables | std::views::values) {
+    newContext->stackOffset += size;
   }
-  newContext->m_parent = std::move(m_impl);
+  newContext->parent = std::move(m_impl);
   m_impl = std::move(newContext);
 }
 
 void Context::pop() {
-  m_impl = std::move(m_impl->m_parent);
+  m_impl = std::move(m_impl->parent);
 }
 
 void Context::addVariable(const Parser::Nodes::VariableDeclaration* variable) {
-  VariableContext varContext;
-  varContext.m_offset = m_impl->m_stackOffset;
-  for (const auto& [size, offset] : m_impl->m_variables | std::views::values) {
-    varContext.m_offset += size;
+  const Parser::Nodes::Node* typeIdent = variable->typeName()->child(Parser::Nodes::NodeType::Identifier);
+  if (!typeIdent) {
+    throw GenerationException("Missing identifier in type name");
   }
-  varContext.m_size = 8; // TODO: Not everything is 8 bytes
-  m_impl->m_variables.try_emplace(variable->name(), varContext);
+
+  const std::optional<Tokens::Token> identToken = typeIdent->token();
+  if (!identToken || !identToken->value) {
+    throw GenerationException("Invalid typename");
+  }
+
+  const std::optional<TypeContext> typeContext = type(*identToken->value);
+  if (!typeContext) {
+    throw GenerationException("Invalid type specified");
+  }
+
+  VariableContext varContext;
+  varContext.offset = m_impl->stackOffset;
+  for (const auto& [size, offset] : m_impl->variables | std::views::values) {
+    varContext.offset += size;
+  }
+  // Align the variable
+  varContext.offset =
+      ((varContext.offset + typeContext->alignment - 1) / typeContext->alignment) * typeContext->alignment;
+
+  varContext.size = typeContext->size;
+  m_impl->variables.try_emplace(variable->name(), varContext);
 }
 
 std::optional<Context::VariableContext> Context::variable(const std::string& name) const {
   auto func = [name](const ContextImpl& context) -> std::optional<VariableContext> {
-    if (context.m_variables.contains(name)) {
-      return context.m_variables.at(name);
+    if (context.variables.contains(name)) {
+      return context.variables.at(name);
     }
     return std::nullopt;
   };
 
   return recurseContext<VariableContext>(*m_impl, func);
+}
+
+std::optional<Context::TypeContext> Context::type(const std::string& name) const {
+  if (m_primitiveTypes.contains(name)) {
+    return m_primitiveTypes.at(name);
+  }
+
+  auto func = [name](const ContextImpl& context) -> std::optional<TypeContext> {
+    if (context.types.contains(name)) {
+      return context.types.at(name);
+    }
+    return std::nullopt;
+  };
+
+  return recurseContext<TypeContext>(*m_impl, func);
 }
 
 template <typename ReturnT>
@@ -51,7 +87,7 @@ std::optional<ReturnT> Context::recurseContext(
     return ret;
   }
 
-  if (context.m_parent) return recurseContext(*(context.m_parent), findFunc);
+  if (context.parent) return recurseContext(*(context.parent), findFunc);
 
   return {};
 }

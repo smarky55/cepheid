@@ -2,6 +2,9 @@
 
 #include <Generator/Context.h>
 #include <Generator/GenerationException.h>
+#include <Generator/Location.h>
+#include <Generator/MemoryLocation.h>
+#include <Generator/Register.h>
 #include <Parser/Node/BinaryOperation.h>
 #include <Parser/Node/Function.h>
 #include <Parser/Node/Scope.h>
@@ -16,6 +19,22 @@
 using namespace Cepheid::Gen;
 
 using Cepheid::Parser::Nodes::NodeType;
+
+namespace {
+std::array REGISTERS{
+    Register{Register::Kind::Original, "a"},
+    Register{Register::Kind::Original, "b"},
+    Register{Register::Kind::Original, "c"},
+    Register{Register::Kind::Original, "d"},
+    Register{Register::Kind::AMD64, "r8"},
+    Register{Register::Kind::AMD64, "r9"},
+    Register{Register::Kind::AMD64, "r10"},
+    Register{Register::Kind::AMD64, "r11"},
+    Register{Register::Kind::AMD64, "r12"},
+    Register{Register::Kind::AMD64, "r13"},
+    Register{Register::Kind::AMD64, "r14"},
+    Register{Register::Kind::AMD64, "r15"}};
+}
 
 Generator::Generator(Parser::Nodes::NodePtr root) : m_root(std::move(root)) {
 }
@@ -117,7 +136,7 @@ std::string Generator::genReturn(const Parser::Nodes::Node* node, Context& conte
   std::string ret;
   // Compute expression
   if (!node->children().empty()) {
-    ret += genExpression(node->children()[0].get(), "rbx", context);
+    ret += genExpression(node->children()[0].get(), REGISTERS[1], context);
     ret += instruction("mov", {"rax", "rbx"});
   }
 
@@ -142,41 +161,43 @@ std::string Generator::genVariableDeclaration(const Parser::Nodes::Node* node, C
 
   std::string ret;
   if (variableDeclaration->expression()) {
-    ret = genExpression(variableDeclaration->expression(), "rbx", context);
-    ret += instruction("mov", {"[ rsp - " + std::to_string(varContext->m_offset + varContext->m_size) + " ]", "rbx"});
+    const MemoryLocation location{"[ rsp + " + std::to_string(varContext->offset) + " ]"};
+    const Register& reg = nextRegister(location);
+    ret = genExpression(variableDeclaration->expression(), reg, context);
+    ret += instruction("mov", {location.asAsm(varContext->size), reg.asAsm(varContext->size)});
   }
 
   return ret;
 }
 
 std::string Generator::genExpression(
-    const Parser::Nodes::Node* node, std::string_view resultReg, Context& context) const {
+    const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const {
   switch (node->type()) {
     case NodeType::BinaryOperation:
-      return genBinaryOperation(node, resultReg, context);
+      return genBinaryOperation(node, resultLocation, context);
     case NodeType::UnaryOperation:
-      return genUnaryOperation(node, resultReg, context);
+      return genUnaryOperation(node, resultLocation, context);
     default:
-      return genBaseOperation(node, resultReg, context);
+      return genBaseOperation(node, resultLocation, context);
   }
 }
 
 std::string Generator::genBinaryOperation(
-    const Parser::Nodes::Node* node, std::string_view resultReg, Context& context) const {
+    const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const {
   const auto* binaryNode = dynamic_cast<const Parser::Nodes::BinaryOperation*>(node);
-  const std::string_view rhsReg = nextRegister(resultReg);
-  std::string result = genExpression(binaryNode->lhs(), resultReg, context);
+  const Register& rhsReg = nextRegister(resultLocation);
+  std::string result = genExpression(binaryNode->lhs(), resultLocation, context);
   result += genExpression(binaryNode->rhs(), rhsReg, context);
 
   switch (binaryNode->operation()) {
     case Parser::Nodes::BinaryOperationType::Add:
-      result += instruction("add", {resultReg, rhsReg});
+      result += instruction("add", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
       break;
     case Parser::Nodes::BinaryOperationType::Subtract:
-      result += instruction("sub", {resultReg, rhsReg});
+      result += instruction("sub", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
       break;
     case Parser::Nodes::BinaryOperationType::Multiply:
-      result += instruction("imul", {resultReg, rhsReg});
+      result += instruction("imul", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
       break;
     case Parser::Nodes::BinaryOperationType::Divide:
       // TODO: IDIV needs its LHS in RDX:RAX first and stores the Quotient in RAX and remainder in RDX
@@ -191,22 +212,22 @@ std::string Generator::genBinaryOperation(
 }
 
 std::string Generator::genUnaryOperation(
-    const Parser::Nodes::Node* node, std::string_view resultReg, Context& context) const {
+    const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const {
   const auto* unaryNode = dynamic_cast<const Parser::Nodes::UnaryOperation*>(node);
-  std::string result = genExpression(unaryNode->operand(), resultReg, context);
+  std::string result = genExpression(unaryNode->operand(), resultLocation, context);
 
   switch (unaryNode->operation()) {
     case Parser::Nodes::UnaryOperationType::Negate:
-      result += instruction("neg", {resultReg});
+      result += instruction("neg", {resultLocation.asAsm(8)});
       break;
     case Parser::Nodes::UnaryOperationType::Not:
-      result += instruction("not", {resultReg});
+      result += instruction("not", {resultLocation.asAsm(8)});
       break;
     case Parser::Nodes::UnaryOperationType::Decrement:
-      result += instruction("dec", {resultReg});
+      result += instruction("dec", {resultLocation.asAsm(8)});
       break;
     case Parser::Nodes::UnaryOperationType::Increment:
-      result += instruction("inc", {resultReg});
+      result += instruction("inc", {resultLocation.asAsm(8)});
       break;
     default:
       throw GenerationException("Unhandled unary operation");
@@ -216,10 +237,10 @@ std::string Generator::genUnaryOperation(
 }
 
 std::string Generator::genBaseOperation(
-    const Parser::Nodes::Node* node, std::string_view resultReg, Context& context) const {
+    const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const {
   switch (node->type()) {
     case NodeType::IntegerLiteral:
-      return instruction("mov", {resultReg, node->token()->value.value()});
+      return instruction("mov", {resultLocation.asAsm(8), node->token()->value.value()});
     case NodeType::Identifier: {
       const std::string identName = node->token()->value.value();
       const std::optional<Context::VariableContext> varContext = context.variable(identName);
@@ -227,9 +248,13 @@ std::string Generator::genBaseOperation(
       if (!varContext) {
         throw GenerationException("Unknown identifier in expression");
       }
-
-      return instruction(
-          "mov", {resultReg, "[ rsp - " + std::to_string(varContext->m_offset + varContext->m_size) + " ]"});
+      const MemoryLocation location{"[ rsp + " + std::to_string(varContext->offset) + " ]"};
+      std::string ret = instruction("mov", {resultLocation.asAsm(varContext->size), location.asAsm(varContext->size)});
+      if (varContext->size != 8) {
+        const std::string_view inst = varContext->size == 1 ? "movsx" : "movsxd";
+        ret += instruction(inst, {resultLocation.asAsm(8), resultLocation.asAsm(varContext->size)});
+      }
+      return ret;
     }
     default:
       break;
@@ -250,11 +275,15 @@ std::string Generator::instruction(std::string_view inst, const std::vector<std:
   return ss.str();
 }
 
-std::string_view Generator::nextRegister(std::string_view reg) {
-  static std::array<std::string_view, 12> registers{
-      "rax", "rbx", "rcx", "rdx", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"};
-  auto current = std::ranges::find(registers, reg);
-  if (current == registers.end() || current++ == registers.end()) {
+const Register& Generator::nextRegister(const Location& location) {
+  const auto* reg = dynamic_cast<const Register*>(&location);
+  if (!reg) {
+    // We got a memory address, so give the first register
+    return REGISTERS[0];
+  }
+  // Find the next one
+  auto current = std::ranges::find(REGISTERS, *reg);
+  if (current == REGISTERS.end() || current++ == REGISTERS.end()) {
     throw GenerationException("Unable to get next register");
   }
   return *current++;

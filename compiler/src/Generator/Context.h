@@ -25,20 +25,28 @@ class Context {
   void pop();
 
   struct VariableContext {
-    size_t m_size;
-    size_t m_offset;
+    size_t size;
+    size_t offset;
   };
 
   void addVariable(const Parser::Nodes::VariableDeclaration* variable);
-  std::optional<VariableContext> variable(const std::string& name) const;
+  [[nodiscard]] std::optional<VariableContext> variable(const std::string& name) const;
+
+  struct TypeContext {
+    size_t size;
+    size_t alignment;
+  };
+
+  [[nodiscard]] std::optional<TypeContext> type(const std::string& name) const;
 
  private:
   struct ContextImpl {
-    std::unique_ptr<ContextImpl> m_parent;
+    std::unique_ptr<ContextImpl> parent;
 
-    size_t m_stackOffset = 0;
+    size_t stackOffset = 0;
 
-    std::map<std::string, VariableContext> m_variables;
+    std::map<std::string, VariableContext> variables;
+    std::map<std::string, TypeContext> types;
   };
 
   template <typename ReturnT>
@@ -46,6 +54,8 @@ class Context {
       const ContextImpl& context, std::function<std::optional<ReturnT>(const ContextImpl&)>) const;
 
   std::unique_ptr<ContextImpl> m_impl;
+
+  std::map<std::string, TypeContext> m_primitiveTypes;
 };
 
 }  // namespace Cepheid::Gen
