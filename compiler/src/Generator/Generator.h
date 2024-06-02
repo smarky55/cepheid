@@ -19,17 +19,22 @@ class Generator {
 
  private:
   [[nodiscard]] std::string genProgram(const Parser::Nodes::Node* node, Context& context) const;
-  [[nodiscard]] std::string genScope(const Parser::Nodes::Scope* scope, size_t stackOffset, Context& context) const;
+  [[nodiscard]] std::string genScope(const Parser::Nodes::Scope* scope, Context& context) const;
   [[nodiscard]] std::string genStatement(const Parser::Nodes::Node* node, Context& context) const;
 
   [[nodiscard]] std::string genFunction(const Parser::Nodes::Node* node, Context& context) const;
   [[nodiscard]] std::string genReturn(const Parser::Nodes::Node* node, Context& context) const;
   [[nodiscard]] std::string genVariableDeclaration(const Parser::Nodes::Node* node, Context& context) const;
+  [[nodiscard]] std::string genConditional(const Parser::Nodes::Node* node, Context& context) const;
 
-  [[nodiscard]] std::string genExpression(const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const;
-  [[nodiscard]] std::string genBinaryOperation(const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const;
-  [[nodiscard]] std::string genUnaryOperation(const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const;
-  [[nodiscard]] std::string genBaseOperation(const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const;
+  [[nodiscard]] std::string genExpression(
+      const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const;
+  [[nodiscard]] std::string genBinaryOperation(
+      const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const;
+  [[nodiscard]] std::string genUnaryOperation(
+      const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const;
+  [[nodiscard]] std::string genBaseOperation(
+      const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const;
 
   [[nodiscard]] static std::string instruction(std::string_view inst, const std::vector<std::string_view>& args);
 

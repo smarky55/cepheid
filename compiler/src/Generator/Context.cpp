@@ -11,7 +11,7 @@ Context::Context() : m_impl(std::make_unique<ContextImpl>()) {
   m_primitiveTypes = {{"i8", {1, 1}}, {"i16", {2, 2}}, {"i32", {4, 4}}, {"i64", {8, 8}}};
 }
 
-void Context::push() {
+void Context::pushScope() {
   auto newContext = std::make_unique<ContextImpl>();
   newContext->stackOffset = m_impl->stackOffset;
   for (const auto& [size, offset] : m_impl->variables | std::views::values) {
@@ -21,8 +21,17 @@ void Context::push() {
   m_impl = std::move(newContext);
 }
 
-void Context::pop() {
+void Context::pushFunction() {
+  pushScope();
+}
+
+void Context::popScope() {
   m_impl = std::move(m_impl->parent);
+}
+
+void Context::popFunction() {
+  popScope();
+  m_localLabels = 0;
 }
 
 void Context::addVariable(const Parser::Nodes::VariableDeclaration* variable) {
@@ -78,6 +87,10 @@ std::optional<Context::TypeContext> Context::type(const std::string& name) const
   };
 
   return recurseContext<TypeContext>(*m_impl, func);
+}
+
+size_t Context::nextLocalLabel() {
+  return m_localLabels++;
 }
 
 template <typename ReturnT>

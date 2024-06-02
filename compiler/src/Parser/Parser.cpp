@@ -2,6 +2,7 @@
 
 #include <Parser/ParseException.h>
 #include <Parser/Node/BinaryOperation.h>
+#include <Parser/Node/Conditional.h>
 #include <Parser/Node/Function.h>
 #include <Parser/Node/Scope.h>
 #include <Parser/Node/UnaryOperation.h>
@@ -122,6 +123,8 @@ NodePtr Parser::parseStatement() {
     return functionDeclaration;
   } else if (NodePtr variableDeclaration = parseVariableDeclaration()) {
     return variableDeclaration;
+  } else if (NodePtr ifStatement = parseIfStatement()) {
+    return ifStatement;
   }
   return nullptr;
 }
@@ -148,7 +151,7 @@ NodePtr Parser::parseReturnStatement() {
 
 NodePtr Parser::parseVariableDeclaration() {
   // We want at least 2 identifiers, one for the type and one for the variable name
-  if (!checkNextHasValue(TokenType::Identifier) && !checkNextHasValue(TokenType::Identifier, std::nullopt, 1)) {
+  if (!checkNextHasValue(TokenType::Identifier) || !checkNextHasValue(TokenType::Identifier, std::nullopt, 1)) {
     return nullptr;
   }
 
@@ -171,6 +174,35 @@ NodePtr Parser::parseVariableDeclaration() {
   consume();
 
   return declaration;
+}
+
+NodePtr Parser::parseIfStatement() {
+  if (!checkNextHasValue(TokenType::Keyword, "if")) {
+    return nullptr;
+  }
+  consume();
+
+  if (!checkNext(TokenType::OpenParen)) {
+    throw ParseException("Expected \"(\" in if statement");
+  }
+  consume();
+
+  NodePtr expression = parseExpression();
+  if (!expression) {
+    throw ParseException("Expected expression in if statement");
+  }
+
+  if (!checkNext(TokenType::CloseParen)) {
+    throw ParseException("Expected \")\" in if statement");
+  }
+  consume();
+
+  std::unique_ptr<Nodes::Scope> scope = parseScope();
+  if (!scope) {
+    throw ParseException("Expected scope for if statement");
+  }
+
+  return std::make_unique<Nodes::Conditional>(std::move(expression), std::move(scope));
 }
 
 std::optional<Token> Parser::parseOperator(const std::vector<std::string_view>& operators) {

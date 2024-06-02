@@ -6,15 +6,16 @@
 #include <Generator/MemoryLocation.h>
 #include <Generator/Register.h>
 #include <Parser/Node/BinaryOperation.h>
+#include <Parser/Node/Conditional.h>
 #include <Parser/Node/Function.h>
 #include <Parser/Node/Scope.h>
 #include <Parser/Node/UnaryOperation.h>
+#include <Parser/Node/VariableDeclaration.h>
 #include <Tokeniser/Token.h>
 
 #include <array>
 #include <optional>
 #include <sstream>
-#include <Parser/Node/VariableDeclaration.h>
 
 using namespace Cepheid::Gen;
 
@@ -74,8 +75,8 @@ _entry:
   return program;
 }
 
-std::string Generator::genScope(const Parser::Nodes::Scope* scope, size_t stackOffset, Context& context) const {
-  context.push();
+std::string Generator::genScope(const Parser::Nodes::Scope* scope, Context& context) const {
+  context.pushScope();
 
   std::string body;
 
@@ -87,7 +88,7 @@ std::string Generator::genScope(const Parser::Nodes::Scope* scope, size_t stackO
     body += genStatement(child.get(), context);
   }
 
-  context.pop();
+  context.popScope();
   return body;
 }
 
@@ -99,6 +100,8 @@ std::string Generator::genStatement(const Parser::Nodes::Node* node, Context& co
       return genReturn(node, context);
     case NodeType::VariableDeclaration:
       return genVariableDeclaration(node, context);
+    case NodeType::Conditional:
+      return genConditional(node, context);
     default:
       break;
   }
@@ -114,7 +117,7 @@ std::string Generator::genFunction(const Parser::Nodes::Node* node, Context& con
   }
 
   const size_t stackSpace = 32 + ((function->requiredStackSpace() + 15) / 16) * 16;
-  context.push();
+  context.pushFunction();
   // TODO update context for function parameters
 
   // Label and prologue
@@ -126,9 +129,9 @@ std::string Generator::genFunction(const Parser::Nodes::Node* node, Context& con
   body += instruction("sub", {"rsp", std::to_string(stackSpace)});
 
   // Scope
-  body += genScope(function->scope(), 0, context);
+  body += genScope(function->scope(), context);
 
-  context.pop();
+  context.popFunction();
   return body;
 }
 
@@ -170,6 +173,22 @@ std::string Generator::genVariableDeclaration(const Parser::Nodes::Node* node, C
   return ret;
 }
 
+std::string Generator::genConditional(const Parser::Nodes::Node* node, Context& context) const {
+  const auto conditional = dynamic_cast<const Parser::Nodes::Conditional*>(node);
+  if (!conditional) {
+    throw GenerationException("Expected conditional");
+  }
+  const size_t labelIndex = context.nextLocalLabel();
+  const std::string label = ".L" + std::to_string(labelIndex);
+  const Register& conditionRegister = REGISTERS[0];
+  std::string ret = genExpression(conditional->expression(), conditionRegister, context);
+  ret += instruction("cmp", {conditionRegister.asAsm(1), "0"});
+  ret += instruction("je", {label});
+  ret += genScope(conditional->scope(), context);
+  ret += label + ":\n";
+  return ret;
+}
+
 std::string Generator::genExpression(
     const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const {
   switch (node->type()) {
@@ -201,9 +220,38 @@ std::string Generator::genBinaryOperation(
       break;
     case Parser::Nodes::BinaryOperationType::Divide:
       // TODO: IDIV needs its LHS in RDX:RAX first and stores the Quotient in RAX and remainder in RDX
-
       // result += instruction("idiv", {resultReg, rhsReg});
-      // break;
+      break;
+    case Parser::Nodes::BinaryOperationType::Equal:
+      result += instruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      result += instruction("mov", {resultLocation.asAsm(8), "0"});
+      result += instruction("sete", {resultLocation.asAsm(1)});
+      break;
+    case Parser::Nodes::BinaryOperationType::NotEqual:
+      result += instruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      result += instruction("mov", {resultLocation.asAsm(8), "0"});
+      result += instruction("setne", {resultLocation.asAsm(1)});
+      break;
+    case Parser::Nodes::BinaryOperationType::GreaterEqual:
+      result += instruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      result += instruction("mov", {resultLocation.asAsm(8), "0"});
+      result += instruction("setge", {resultLocation.asAsm(1)});
+      break;
+    case Parser::Nodes::BinaryOperationType::GreaterThan:
+      result += instruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      result += instruction("mov", {resultLocation.asAsm(8), "0"});
+      result += instruction("setg", {resultLocation.asAsm(1)});
+      break;
+    case Parser::Nodes::BinaryOperationType::LessEqual:
+      result += instruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      result += instruction("mov", {resultLocation.asAsm(8), "0"});
+      result += instruction("setle", {resultLocation.asAsm(1)});
+      break;
+    case Parser::Nodes::BinaryOperationType::LessThan:
+      result += instruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      result += instruction("mov", {resultLocation.asAsm(8), "0"});
+      result += instruction("setl", {resultLocation.asAsm(1)});
+      break;
     default:
       throw GenerationException("Unhandled binary operation");
   }

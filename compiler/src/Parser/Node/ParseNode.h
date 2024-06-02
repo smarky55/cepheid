@@ -22,6 +22,8 @@ enum class NodeType {
   UnaryOperation,
   Operator,
   IntegerLiteral,
+  Conditional,
+  Loop,
 };
 
 class Node;

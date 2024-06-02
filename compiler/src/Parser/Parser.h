@@ -33,6 +33,8 @@ class Parser {
 
   Nodes::NodePtr parseVariableDeclaration();
 
+  Nodes::NodePtr parseIfStatement();
+
   std::optional<Tokens::Token> parseOperator(const std::vector<std::string_view>& operators);
 
   Nodes::NodePtr parseExpression();

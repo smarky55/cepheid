@@ -44,7 +44,7 @@ static bool isIdentChar(char character) {
 }
 
 static bool isKeyword(std::string_view identifier) {
-  static std::array<std::string_view, 5> keywords{"func", "return", "import", "export", "module"};
+  static std::array<std::string_view, 8> keywords{"func", "return", "import", "export", "module", "if", "while", "for"};
 
   return std::ranges::find(keywords, identifier) != keywords.end();
 }

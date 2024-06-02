@@ -20,9 +20,11 @@ class Context {
   Context& operator=(Context&& other) noexcept = delete;
   ~Context() = default;
 
-  void push();
+  void pushScope();
+  void pushFunction();
 
-  void pop();
+  void popScope();
+  void popFunction();
 
   struct VariableContext {
     size_t size;
@@ -39,6 +41,8 @@ class Context {
 
   [[nodiscard]] std::optional<TypeContext> type(const std::string& name) const;
 
+  [[nodiscard]] size_t nextLocalLabel();
+
  private:
   struct ContextImpl {
     std::unique_ptr<ContextImpl> parent;
@@ -54,6 +58,7 @@ class Context {
       const ContextImpl& context, std::function<std::optional<ReturnT>(const ContextImpl&)>) const;
 
   std::unique_ptr<ContextImpl> m_impl;
+  size_t m_localLabels = 0;
 
   std::map<std::string, TypeContext> m_primitiveTypes;
 };
