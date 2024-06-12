@@ -40,13 +40,15 @@ std::array REGISTERS{
 Generator::Generator(Parser::Nodes::NodePtr root) : m_root(std::move(root)) {
 }
 
-std::string Generator::generate() const {
+std::string Generator::generate() {
   Context context;
-  return genProgram(m_root.get(), context);
+  genProgram(m_root.get(), context);
+
+  return m_program.str();
 }
 
-std::string Generator::genProgram(const Parser::Nodes::Node* node, Context& context) const {
-  std::string program = R"(bits 64
+void Generator::genProgram(const Parser::Nodes::Node* node, Context& context) {
+  m_program << R"(bits 64
 default rel
 
 segment .text
@@ -69,46 +71,50 @@ _entry:
 )";
 
   for (const auto& child : node->children()) {
-    program += genStatement(child.get(), context);
+    genStatement(child.get(), context);
   }
-
-  return program;
 }
 
-std::string Generator::genScope(const Parser::Nodes::Scope* scope, Context& context) const {
+void Generator::genScope(const Parser::Nodes::Scope* scope, Context& context) {
   context.pushScope();
-
-  std::string body;
 
   if (!scope) {
     throw GenerationException("Expected scope!");
   }
 
   for (const auto& child : scope->statements()) {
-    body += genStatement(child.get(), context);
+    genStatement(child.get(), context);
   }
 
   context.popScope();
-  return body;
 }
 
-std::string Generator::genStatement(const Parser::Nodes::Node* node, Context& context) const {
+void Generator::genStatement(const Parser::Nodes::Node* node, Context& context) {
   switch (node->type()) {
     case NodeType::Function:
-      return genFunction(node, context);
+      genFunction(node, context);
+      break;
     case NodeType::ReturnStatement:
-      return genReturn(node, context);
+      genReturn(node, context);
+      break;
     case NodeType::VariableDeclaration:
-      return genVariableDeclaration(node, context);
+      genVariableDeclaration(node, context);
+      break;
     case NodeType::Conditional:
-      return genConditional(node, context);
+      genConditional(node, context);
+      break;
+    case NodeType::Loop:
+      // genLoop(node, context);
+      break;
+    case NodeType::Expression:
+      // TODO: how to handle expression statements?
+      break;
     default:
       break;
   }
-  return {};
 }
 
-std::string Generator::genFunction(const Parser::Nodes::Node* node, Context& context) const {
+void Generator::genFunction(const Parser::Nodes::Node* node, Context& context) {
   std::string body;
 
   const auto function = dynamic_cast<const Parser::Nodes::Function*>(node);
@@ -122,34 +128,32 @@ std::string Generator::genFunction(const Parser::Nodes::Node* node, Context& con
 
   // Label and prologue
   const std::string name = "cep_" + function->name();
-  body += name + ":\n";
-  body += instruction("push", {"rbp"});
-  body += instruction("mov", {"rbp", "rsp"});
+  writeLabel(name);
+  writeInstruction("push", {"rbp"});
+  writeInstruction("mov", {"rbp", "rsp"});
 
-  body += instruction("sub", {"rsp", std::to_string(stackSpace)});
+  writeInstruction("sub", {"rsp", std::to_string(stackSpace)});
 
   // Scope
-  body += genScope(function->scope(), context);
+  genScope(function->scope(), context);
 
   context.popFunction();
-  return body;
 }
 
-std::string Generator::genReturn(const Parser::Nodes::Node* node, Context& context) const {
+void Generator::genReturn(const Parser::Nodes::Node* node, Context& context) {
   std::string ret;
   // Compute expression
   if (!node->children().empty()) {
-    ret += genExpression(node->children()[0].get(), REGISTERS[1], context);
-    ret += instruction("mov", {"rax", "rbx"});
+    genExpression(node->children()[0].get(), REGISTERS[1], context);
+    writeInstruction("mov", {"rax", "rbx"});
   }
 
   // Do the return
-  ret += instruction("leave", {});
-  ret += instruction("ret", {});
-  return ret;
+  writeInstruction("leave", {});
+  writeInstruction("ret", {});
 }
 
-std::string Generator::genVariableDeclaration(const Parser::Nodes::Node* node, Context& context) const {
+void Generator::genVariableDeclaration(const Parser::Nodes::Node* node, Context& context) {
   const auto variableDeclaration = dynamic_cast<const Parser::Nodes::VariableDeclaration*>(node);
   if (!variableDeclaration) {
     throw GenerationException("Expected variable declaration");
@@ -162,18 +166,15 @@ std::string Generator::genVariableDeclaration(const Parser::Nodes::Node* node, C
     throw GenerationException("Somehow failed to add variable to context");
   }
 
-  std::string ret;
   if (variableDeclaration->expression()) {
     const MemoryLocation location{"[ rsp + " + std::to_string(varContext->offset) + " ]"};
     const Register& reg = nextRegister(location);
-    ret = genExpression(variableDeclaration->expression(), reg, context);
-    ret += instruction("mov", {location.asAsm(varContext->size), reg.asAsm(varContext->size)});
+    genExpression(variableDeclaration->expression(), reg, context);
+    writeInstruction("mov", {location.asAsm(varContext->size), reg.asAsm(varContext->size)});
   }
-
-  return ret;
 }
 
-std::string Generator::genConditional(const Parser::Nodes::Node* node, Context& context) const {
+void Generator::genConditional(const Parser::Nodes::Node* node, Context& context) {
   const auto conditional = dynamic_cast<const Parser::Nodes::Conditional*>(node);
   if (!conditional) {
     throw GenerationException("Expected conditional");
@@ -181,114 +182,109 @@ std::string Generator::genConditional(const Parser::Nodes::Node* node, Context& 
   const size_t labelIndex = context.nextLocalLabel();
   const std::string label = ".L" + std::to_string(labelIndex);
   const Register& conditionRegister = REGISTERS[0];
-  std::string ret = genExpression(conditional->expression(), conditionRegister, context);
-  ret += instruction("cmp", {conditionRegister.asAsm(1), "0"});
-  ret += instruction("je", {label});
-  ret += genScope(conditional->scope(), context);
-  ret += label + ":\n";
-  return ret;
+  genExpression(conditional->expression(), conditionRegister, context);
+  writeInstruction("cmp", {conditionRegister.asAsm(1), "0"});
+  writeInstruction("je", {label});
+  genScope(conditional->scope(), context);
+  writeLabel(label);
 }
 
-std::string Generator::genExpression(
-    const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const {
+void Generator::genExpression(const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) {
   switch (node->type()) {
     case NodeType::BinaryOperation:
-      return genBinaryOperation(node, resultLocation, context);
+      genBinaryOperation(node, resultLocation, context);
+      break;
     case NodeType::UnaryOperation:
-      return genUnaryOperation(node, resultLocation, context);
+      genUnaryOperation(node, resultLocation, context);
+      break;
     default:
-      return genBaseOperation(node, resultLocation, context);
+      genBaseOperation(node, resultLocation, context);
+      break;
   }
 }
 
-std::string Generator::genBinaryOperation(
-    const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const {
+void Generator::genBinaryOperation(const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) {
   const auto* binaryNode = dynamic_cast<const Parser::Nodes::BinaryOperation*>(node);
   const Register& rhsReg = nextRegister(resultLocation);
-  std::string result = genExpression(binaryNode->lhs(), resultLocation, context);
-  result += genExpression(binaryNode->rhs(), rhsReg, context);
+  genExpression(binaryNode->lhs(), resultLocation, context);
+  genExpression(binaryNode->rhs(), rhsReg, context);
 
   switch (binaryNode->operation()) {
     case Parser::Nodes::BinaryOperationType::Add:
-      result += instruction("add", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      writeInstruction("add", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
       break;
     case Parser::Nodes::BinaryOperationType::Subtract:
-      result += instruction("sub", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      writeInstruction("sub", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
       break;
     case Parser::Nodes::BinaryOperationType::Multiply:
-      result += instruction("imul", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      writeInstruction("imul", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
       break;
     case Parser::Nodes::BinaryOperationType::Divide:
       // TODO: IDIV needs its LHS in RDX:RAX first and stores the Quotient in RAX and remainder in RDX
-      // result += instruction("idiv", {resultReg, rhsReg});
+      // instruction("idiv", {resultReg, rhsReg});
       break;
     case Parser::Nodes::BinaryOperationType::Equal:
-      result += instruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
-      result += instruction("mov", {resultLocation.asAsm(8), "0"});
-      result += instruction("sete", {resultLocation.asAsm(1)});
+      writeInstruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      writeInstruction("mov", {resultLocation.asAsm(8), "0"});
+      writeInstruction("sete", {resultLocation.asAsm(1)});
       break;
     case Parser::Nodes::BinaryOperationType::NotEqual:
-      result += instruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
-      result += instruction("mov", {resultLocation.asAsm(8), "0"});
-      result += instruction("setne", {resultLocation.asAsm(1)});
+      writeInstruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      writeInstruction("mov", {resultLocation.asAsm(8), "0"});
+      writeInstruction("setne", {resultLocation.asAsm(1)});
       break;
     case Parser::Nodes::BinaryOperationType::GreaterEqual:
-      result += instruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
-      result += instruction("mov", {resultLocation.asAsm(8), "0"});
-      result += instruction("setge", {resultLocation.asAsm(1)});
+      writeInstruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      writeInstruction("mov", {resultLocation.asAsm(8), "0"});
+      writeInstruction("setge", {resultLocation.asAsm(1)});
       break;
     case Parser::Nodes::BinaryOperationType::GreaterThan:
-      result += instruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
-      result += instruction("mov", {resultLocation.asAsm(8), "0"});
-      result += instruction("setg", {resultLocation.asAsm(1)});
+      writeInstruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      writeInstruction("mov", {resultLocation.asAsm(8), "0"});
+      writeInstruction("setg", {resultLocation.asAsm(1)});
       break;
     case Parser::Nodes::BinaryOperationType::LessEqual:
-      result += instruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
-      result += instruction("mov", {resultLocation.asAsm(8), "0"});
-      result += instruction("setle", {resultLocation.asAsm(1)});
+      writeInstruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      writeInstruction("mov", {resultLocation.asAsm(8), "0"});
+      writeInstruction("setle", {resultLocation.asAsm(1)});
       break;
     case Parser::Nodes::BinaryOperationType::LessThan:
-      result += instruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
-      result += instruction("mov", {resultLocation.asAsm(8), "0"});
-      result += instruction("setl", {resultLocation.asAsm(1)});
+      writeInstruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      writeInstruction("mov", {resultLocation.asAsm(8), "0"});
+      writeInstruction("setl", {resultLocation.asAsm(1)});
       break;
     default:
       throw GenerationException("Unhandled binary operation");
   }
-
-  return result;
 }
 
-std::string Generator::genUnaryOperation(
-    const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const {
+void Generator::genUnaryOperation(const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) {
   const auto* unaryNode = dynamic_cast<const Parser::Nodes::UnaryOperation*>(node);
-  std::string result = genExpression(unaryNode->operand(), resultLocation, context);
+  genExpression(unaryNode->operand(), resultLocation, context);
 
   switch (unaryNode->operation()) {
     case Parser::Nodes::UnaryOperationType::Negate:
-      result += instruction("neg", {resultLocation.asAsm(8)});
+      writeInstruction("neg", {resultLocation.asAsm(8)});
       break;
     case Parser::Nodes::UnaryOperationType::Not:
-      result += instruction("not", {resultLocation.asAsm(8)});
+      writeInstruction("not", {resultLocation.asAsm(8)});
       break;
     case Parser::Nodes::UnaryOperationType::Decrement:
-      result += instruction("dec", {resultLocation.asAsm(8)});
+      writeInstruction("dec", {resultLocation.asAsm(8)});
       break;
     case Parser::Nodes::UnaryOperationType::Increment:
-      result += instruction("inc", {resultLocation.asAsm(8)});
+      writeInstruction("inc", {resultLocation.asAsm(8)});
       break;
     default:
       throw GenerationException("Unhandled unary operation");
   }
-
-  return result;
 }
 
-std::string Generator::genBaseOperation(
-    const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) const {
+void Generator::genBaseOperation(const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) {
   switch (node->type()) {
     case NodeType::IntegerLiteral:
-      return instruction("mov", {resultLocation.asAsm(8), node->token()->value.value()});
+      writeInstruction("mov", {resultLocation.asAsm(8), node->token()->value.value()});
+      break;
     case NodeType::Identifier: {
       const std::string identName = node->token()->value.value();
       const std::optional<Context::VariableContext> varContext = context.variable(identName);
@@ -297,30 +293,31 @@ std::string Generator::genBaseOperation(
         throw GenerationException("Unknown identifier in expression");
       }
       const MemoryLocation location{"[ rsp + " + std::to_string(varContext->offset) + " ]"};
-      std::string ret = instruction("mov", {resultLocation.asAsm(varContext->size), location.asAsm(varContext->size)});
+      writeInstruction("mov", {resultLocation.asAsm(varContext->size), location.asAsm(varContext->size)});
       if (varContext->size != 8) {
         const std::string_view inst = varContext->size == 1 ? "movsx" : "movsxd";
-        ret += instruction(inst, {resultLocation.asAsm(8), resultLocation.asAsm(varContext->size)});
+        writeInstruction(inst, {resultLocation.asAsm(8), resultLocation.asAsm(varContext->size)});
       }
-      return ret;
+      break;
     }
     default:
       break;
   }
-  return {};
 }
 
-std::string Generator::instruction(std::string_view inst, const std::vector<std::string_view>& args) {
-  std::stringstream ss;
-  ss << "  " << inst;
+void Generator::writeInstruction(std::string_view inst, const std::vector<std::string_view>& args) {
+  m_program << "  " << inst;
   if (!args.empty()) {
-    ss << " " << args[0];
+    m_program << " " << args[0];
     for (size_t i = 1; i < args.size(); i++) {
-      ss << ", " << args[i];
+      m_program << ", " << args[i];
     }
   }
-  ss << "\n";
-  return ss.str();
+  m_program << "\n";
+}
+
+void Generator::writeLabel(std::string_view label) {
+  m_program << label << ":\n";
 }
 
 const Register& Generator::nextRegister(const Location& location) {
