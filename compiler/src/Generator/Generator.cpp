@@ -2,9 +2,9 @@
 
 #include <Generator/Context.h>
 #include <Generator/GenerationException.h>
-#include <Generator/Location.h>
-#include <Generator/MemoryLocation.h>
-#include <Generator/Register.h>
+#include <Generator/Location/Location.h>
+#include <Generator/Location/MemoryLocation.h>
+#include <Generator/Location/Register.h>
 #include <Parser/Node/BinaryOperation.h>
 #include <Parser/Node/Conditional.h>
 #include <Parser/Node/Function.h>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Generator/Location.h>
+#include <Generator/Location/Location.h>
 
 namespace Cepheid::Gen {
 class Register : public Location {
