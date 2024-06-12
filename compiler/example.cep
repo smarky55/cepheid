@@ -1,3 +1,7 @@
-func main() -> int {
-  return 0;
+func main() -> i32 {
+  i64 bar = 4;
+  while (bar > 0) {
+    bar--;
+  }
+  return bar;
 }

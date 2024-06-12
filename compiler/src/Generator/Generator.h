@@ -28,6 +28,7 @@ class Generator {
   void genReturn(const Parser::Nodes::Node* node, Context& context);
   void genVariableDeclaration(const Parser::Nodes::Node* node, Context& context);
   void genConditional(const Parser::Nodes::Node* node, Context& context);
+  void genLoop(const Parser::Nodes::Node* node, Context& context);
 
   std::unique_ptr<Location> genExpression(const Parser::Nodes::Node* node, Context& context);
   std::unique_ptr<Location> genBinaryOperation(const Parser::Nodes::Node* node, Context& context);

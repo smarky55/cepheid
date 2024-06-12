@@ -8,6 +8,7 @@
 #include <Parser/Node/BinaryOperation.h>
 #include <Parser/Node/Conditional.h>
 #include <Parser/Node/Function.h>
+#include <Parser/Node/Loop.h>
 #include <Parser/Node/Scope.h>
 #include <Parser/Node/UnaryOperation.h>
 #include <Parser/Node/VariableDeclaration.h>
@@ -178,6 +179,35 @@ void Generator::genConditional(const Parser::Nodes::Node* node, Context& context
   writeInstruction(comparison->jmpInstruction(true), {label});
   genScope(conditional->scope(), context);
   writeLabel(label);
+}
+
+void Generator::genLoop(const Parser::Nodes::Node* node, Context& context) {
+  const auto loop = dynamic_cast<const Parser::Nodes::Loop*>(node);
+  if (!loop) {
+    throw GenerationException("Expected loop");
+  }
+
+  const Register& conditionRegister = REGISTERS[0];
+
+  if (const Parser::Nodes::Node* initExpression = loop->initExpression()) {
+    genExpression(initExpression, conditionRegister, context);
+  }
+
+  const std::string conditionLabel = ".L" + std::to_string(context.nextLocalLabel());
+  const std::string endLabel = ".L" + std::to_string(context.nextLocalLabel());
+
+  writeLabel(conditionLabel);
+  genExpression(loop->conditionExpression(), conditionRegister, context);
+  writeInstruction("cmp", {conditionRegister.asAsm(1), "0"});
+  writeInstruction("je", {endLabel});
+  genScope(loop->scope(), context);
+
+  if (const Parser::Nodes::Node* updateExpression = loop->updateExpression()) {
+    genExpression(updateExpression, conditionRegister, context);
+  }
+
+  writeInstruction("jmp", {conditionLabel});
+  writeLabel(endLabel);
 }
 
 std::unique_ptr<Location> Generator::genExpression(const Parser::Nodes::Node* node, Context& context) {

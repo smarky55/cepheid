@@ -4,6 +4,7 @@
 #include <Parser/Node/BinaryOperation.h>
 #include <Parser/Node/Conditional.h>
 #include <Parser/Node/Function.h>
+#include <Parser/Node/Loop.h>
 #include <Parser/Node/Scope.h>
 #include <Parser/Node/UnaryOperation.h>
 #include <Parser/Node/VariableDeclaration.h>
@@ -125,6 +126,8 @@ NodePtr Parser::parseStatement() {
     return variableDeclaration;
   } else if (NodePtr ifStatement = parseIfStatement()) {
     return ifStatement;
+  } else if (NodePtr loopStatement = parseLoopStatement()) {
+    return loopStatement;
   }
   return nullptr;
 }
@@ -203,6 +206,69 @@ NodePtr Parser::parseIfStatement() {
   }
 
   return std::make_unique<Nodes::Conditional>(std::move(expression), std::move(scope));
+}
+
+NodePtr Parser::parseLoopStatement() {
+  if (!(checkNextHasValue(TokenType::Keyword, "for") || checkNextHasValue(TokenType::Keyword, "while"))) {
+    return nullptr;
+  }
+  const Token keywordToken = *consume();
+
+  const bool isFor = keywordToken.value.value_or("while") == "for";
+
+  if (!checkNext(TokenType::OpenParen)) {
+    throw ParseException("Expected \"(\" in if statement");
+  }
+  consume();
+
+  NodePtr initExpression;
+  if (isFor) {
+    initExpression = parseExpression();
+    // This is allowed to be empty
+    if (!checkNext(TokenType::Terminator)) {
+      throw ParseException("Expected \";\" in for statement");
+    }
+    consume();
+  }
+
+  NodePtr conditionExpression = parseExpression();
+  if (!conditionExpression) {
+    throw ParseException("Expected condition");
+  }
+
+  NodePtr updateExpression;
+  if (isFor) {
+    if (!checkNext(TokenType::Terminator)) {
+      throw ParseException("Expected \";\" in for statement");
+    }
+    consume();
+
+    updateExpression = parseExpression();
+    // This can be empty as well
+  }
+
+  if (!checkNext(TokenType::CloseParen)) {
+    throw ParseException("Expected \")\" in loop statement");
+  }
+  consume();
+
+  std::unique_ptr<Nodes::Scope> scope = parseScope();
+  if (!scope) {
+    throw ParseException("Expected scope for loop statement");
+  }
+
+  return std::make_unique<Nodes::Loop>(
+      std::move(initExpression), std::move(conditionExpression), std::move(updateExpression), std::move(scope));
+}
+
+NodePtr Parser::parseExpressionStatement() {
+  NodePtr expression = parseExpression();
+
+  if (!checkNext(TokenType::Terminator)) {
+    throw ParseException("Expected \";\"");
+  }
+  consume();
+  return expression;
 }
 
 std::optional<Token> Parser::parseOperator(const std::vector<std::string_view>& operators) {
