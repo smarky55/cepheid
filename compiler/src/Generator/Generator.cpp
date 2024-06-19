@@ -16,26 +16,12 @@
 #include <array>
 #include <optional>
 #include <sstream>
+#include <Generator/Location/Comparison.h>
+#include <Generator/Location/IntegerLiteral.h>
 
 using namespace Cepheid::Gen;
 
 using Cepheid::Parser::Nodes::NodeType;
-
-namespace {
-std::array REGISTERS{
-    Register{Register::Kind::Original, "a"},
-    Register{Register::Kind::Original, "b"},
-    Register{Register::Kind::Original, "c"},
-    Register{Register::Kind::Original, "d"},
-    Register{Register::Kind::AMD64, "r8"},
-    Register{Register::Kind::AMD64, "r9"},
-    Register{Register::Kind::AMD64, "r10"},
-    Register{Register::Kind::AMD64, "r11"},
-    Register{Register::Kind::AMD64, "r12"},
-    Register{Register::Kind::AMD64, "r13"},
-    Register{Register::Kind::AMD64, "r14"},
-    Register{Register::Kind::AMD64, "r15"}};
-}
 
 Generator::Generator(Parser::Nodes::NodePtr root) : m_root(std::move(root)) {
 }
@@ -144,8 +130,8 @@ void Generator::genReturn(const Parser::Nodes::Node* node, Context& context) {
   std::string ret;
   // Compute expression
   if (!node->children().empty()) {
-    genExpression(node->children()[0].get(), REGISTERS[1], context);
-    writeInstruction("mov", {"rax", "rbx"});
+    const std::unique_ptr<Location> resultLocation = genExpression(node->children()[0].get(), context);
+    writeInstruction("mov", {"rax", resultLocation->asAsm(8)});
   }
 
   // Do the return
@@ -168,9 +154,8 @@ void Generator::genVariableDeclaration(const Parser::Nodes::Node* node, Context&
 
   if (variableDeclaration->expression()) {
     const MemoryLocation location{"[ rsp + " + std::to_string(varContext->offset) + " ]"};
-    const Register& reg = nextRegister(location);
-    genExpression(variableDeclaration->expression(), reg, context);
-    writeInstruction("mov", {location.asAsm(varContext->size), reg.asAsm(varContext->size)});
+    const std::unique_ptr<Location> resultLocation = genExpression(variableDeclaration->expression(), context);
+    writeInstruction("mov", {location.asAsm(varContext->size), resultLocation->asAsm(varContext->size)});
   }
 }
 
@@ -181,109 +166,110 @@ void Generator::genConditional(const Parser::Nodes::Node* node, Context& context
   }
   const size_t labelIndex = context.nextLocalLabel();
   const std::string label = ".L" + std::to_string(labelIndex);
-  const Register& conditionRegister = REGISTERS[0];
-  genExpression(conditional->expression(), conditionRegister, context);
-  writeInstruction("cmp", {conditionRegister.asAsm(1), "0"});
-  writeInstruction("je", {label});
+
+  const std::unique_ptr<Location> resultLocation = genExpression(conditional->expression(), context);
+  std::unique_ptr<Comparison> comparison;
+  if (const auto resultComparison = dynamic_cast<Comparison*>(resultLocation.get())) {
+    comparison = std::make_unique<Comparison>(*resultComparison);
+  } else {
+    writeInstruction("cmp", {resultLocation->asAsm(8), "0"});
+    comparison = std::make_unique<Comparison>(Comparison::Type::Equal);
+  }
+  writeInstruction(comparison->jmpInstruction(true), {label});
   genScope(conditional->scope(), context);
   writeLabel(label);
 }
 
-void Generator::genExpression(const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) {
+std::unique_ptr<Location> Generator::genExpression(const Parser::Nodes::Node* node, Context& context) {
   switch (node->type()) {
     case NodeType::BinaryOperation:
-      genBinaryOperation(node, resultLocation, context);
-      break;
+      return genBinaryOperation(node, context);
     case NodeType::UnaryOperation:
-      genUnaryOperation(node, resultLocation, context);
-      break;
+      return genUnaryOperation(node, context);
     default:
-      genBaseOperation(node, resultLocation, context);
-      break;
+      return genBaseOperation(node, context);
   }
 }
 
-void Generator::genBinaryOperation(const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) {
+std::unique_ptr<Location> Generator::genBinaryOperation(const Parser::Nodes::Node* node, Context& context) {
   const auto* binaryNode = dynamic_cast<const Parser::Nodes::BinaryOperation*>(node);
-  const Register& rhsReg = nextRegister(resultLocation);
-  genExpression(binaryNode->lhs(), resultLocation, context);
-  genExpression(binaryNode->rhs(), rhsReg, context);
+  std::unique_ptr<Location> lhsLoc = genExpression(binaryNode->lhs(), context);
+  std::unique_ptr<Location> rhsLoc = genExpression(binaryNode->rhs(), context);
+
+  lhsLoc = writeComparisonToReg(std::move(lhsLoc), context);
+  lhsLoc = writeImmediateToReg(std::move(lhsLoc), context);
+  rhsLoc = writeComparisonToReg(std::move(rhsLoc), context);
 
   switch (binaryNode->operation()) {
     case Parser::Nodes::BinaryOperationType::Add:
-      writeInstruction("add", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      writeInstruction("add", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
       break;
     case Parser::Nodes::BinaryOperationType::Subtract:
-      writeInstruction("sub", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      writeInstruction("sub", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
       break;
     case Parser::Nodes::BinaryOperationType::Multiply:
-      writeInstruction("imul", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
+      writeInstruction("imul", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
       break;
     case Parser::Nodes::BinaryOperationType::Divide:
       // TODO: IDIV needs its LHS in RDX:RAX first and stores the Quotient in RAX and remainder in RDX
       // instruction("idiv", {resultReg, rhsReg});
       break;
     case Parser::Nodes::BinaryOperationType::Equal:
-      writeInstruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
-      writeInstruction("mov", {resultLocation.asAsm(8), "0"});
-      writeInstruction("sete", {resultLocation.asAsm(1)});
-      break;
+      writeInstruction("cmp", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
+      return std::make_unique<Comparison>(Comparison::Type::Equal);
     case Parser::Nodes::BinaryOperationType::NotEqual:
-      writeInstruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
-      writeInstruction("mov", {resultLocation.asAsm(8), "0"});
-      writeInstruction("setne", {resultLocation.asAsm(1)});
-      break;
+      writeInstruction("cmp", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
+      return std::make_unique<Comparison>(Comparison::Type::NotEqual);
     case Parser::Nodes::BinaryOperationType::GreaterEqual:
-      writeInstruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
-      writeInstruction("mov", {resultLocation.asAsm(8), "0"});
-      writeInstruction("setge", {resultLocation.asAsm(1)});
-      break;
+      writeInstruction("cmp", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
+      return std::make_unique<Comparison>(Comparison::Type::GreaterEqual);
     case Parser::Nodes::BinaryOperationType::GreaterThan:
-      writeInstruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
-      writeInstruction("mov", {resultLocation.asAsm(8), "0"});
-      writeInstruction("setg", {resultLocation.asAsm(1)});
-      break;
+      writeInstruction("cmp", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
+      return std::make_unique<Comparison>(Comparison::Type::Greater);
     case Parser::Nodes::BinaryOperationType::LessEqual:
-      writeInstruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
-      writeInstruction("mov", {resultLocation.asAsm(8), "0"});
-      writeInstruction("setle", {resultLocation.asAsm(1)});
-      break;
+      writeInstruction("cmp", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
+      return std::make_unique<Comparison>(Comparison::Type::LessEqual);
     case Parser::Nodes::BinaryOperationType::LessThan:
-      writeInstruction("cmp", {resultLocation.asAsm(8), rhsReg.asAsm(8)});
-      writeInstruction("mov", {resultLocation.asAsm(8), "0"});
-      writeInstruction("setl", {resultLocation.asAsm(1)});
+      writeInstruction("cmp", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
+      return std::make_unique<Comparison>(Comparison::Type::Less);
+    case Parser::Nodes::BinaryOperationType::Assign:
+      // TODO: Assignment
       break;
     default:
       throw GenerationException("Unhandled binary operation");
   }
+  return lhsLoc;
 }
 
-void Generator::genUnaryOperation(const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) {
+std::unique_ptr<Location> Generator::genUnaryOperation(const Parser::Nodes::Node* node, Context& context) {
   const auto* unaryNode = dynamic_cast<const Parser::Nodes::UnaryOperation*>(node);
-  genExpression(unaryNode->operand(), resultLocation, context);
+  std::unique_ptr<Location> resultLocation = genExpression(unaryNode->operand(), context);
+  resultLocation = writeComparisonToReg(std::move(resultLocation), context);
+  resultLocation = writeImmediateToReg(std::move(resultLocation), context);
 
   switch (unaryNode->operation()) {
     case Parser::Nodes::UnaryOperationType::Negate:
-      writeInstruction("neg", {resultLocation.asAsm(8)});
+      writeInstruction("neg", {resultLocation->asAsm(8)});
       break;
     case Parser::Nodes::UnaryOperationType::Not:
-      writeInstruction("not", {resultLocation.asAsm(8)});
+      writeInstruction("not", {resultLocation->asAsm(8)});
       break;
     case Parser::Nodes::UnaryOperationType::Decrement:
-      writeInstruction("dec", {resultLocation.asAsm(8)});
+      writeInstruction("dec", {resultLocation->asAsm(8)});
       break;
     case Parser::Nodes::UnaryOperationType::Increment:
-      writeInstruction("inc", {resultLocation.asAsm(8)});
+      writeInstruction("inc", {resultLocation->asAsm(8)});
       break;
     default:
       throw GenerationException("Unhandled unary operation");
   }
+  return resultLocation;
 }
 
-void Generator::genBaseOperation(const Parser::Nodes::Node* node, const Location& resultLocation, Context& context) {
+std::unique_ptr<Location> Generator::genBaseOperation(const Parser::Nodes::Node* node, Context& context) {
   switch (node->type()) {
     case NodeType::IntegerLiteral:
-      writeInstruction("mov", {resultLocation.asAsm(8), node->token()->value.value()});
+      return std::make_unique<IntegerLiteral>(node->token()->value.value());
       break;
     case NodeType::Identifier: {
       const std::string identName = node->token()->value.value();
@@ -292,16 +278,10 @@ void Generator::genBaseOperation(const Parser::Nodes::Node* node, const Location
       if (!varContext) {
         throw GenerationException("Unknown identifier in expression");
       }
-      const MemoryLocation location{"[ rsp + " + std::to_string(varContext->offset) + " ]"};
-      writeInstruction("mov", {resultLocation.asAsm(varContext->size), location.asAsm(varContext->size)});
-      if (varContext->size != 8) {
-        const std::string_view inst = varContext->size == 1 ? "movsx" : "movsxd";
-        writeInstruction(inst, {resultLocation.asAsm(8), resultLocation.asAsm(varContext->size)});
-      }
-      break;
+      return std::make_unique<MemoryLocation>("[ rsp + " + std::to_string(varContext->offset) + " ]");
     }
     default:
-      break;
+      throw GenerationException("Unhandled expression");
   }
 }
 
@@ -320,16 +300,25 @@ void Generator::writeLabel(std::string_view label) {
   m_program << label << ":\n";
 }
 
-const Register& Generator::nextRegister(const Location& location) {
-  const auto* reg = dynamic_cast<const Register*>(&location);
-  if (!reg) {
-    // We got a memory address, so give the first register
-    return REGISTERS[0];
+std::unique_ptr<Location> Generator::writeComparisonToReg(std::unique_ptr<Location> loc, Context& context) {
+  if (const auto comparison = dynamic_cast<Comparison*>(loc.get())) {
+    std::unique_ptr<Location> resultLocation = context.nextRegister();
+
+    writeInstruction("mov", {resultLocation->asAsm(8), "0"});
+    writeInstruction(comparison->setInstruction(), {resultLocation->asAsm(1)});
+
+    return resultLocation;
   }
-  // Find the next one
-  auto current = std::ranges::find(REGISTERS, *reg);
-  if (current == REGISTERS.end() || current++ == REGISTERS.end()) {
-    throw GenerationException("Unable to get next register");
+  return loc;
+}
+
+std::unique_ptr<Location> Generator::writeImmediateToReg(std::unique_ptr<Location> loc, Context& context) {
+  if (const auto literal = dynamic_cast<IntegerLiteral*>(loc.get())) {
+    std::unique_ptr<Location> resultLocation = context.nextRegister();
+
+    writeInstruction("mov", {resultLocation->asAsm(8), literal->asAsm(8)});
+
+    return resultLocation;
   }
-  return *current++;
+  return loc;
 }

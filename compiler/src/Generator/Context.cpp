@@ -7,8 +7,40 @@
 
 using namespace Cepheid::Gen;
 
+Context::RegisterContext::RegisterContext(Register reg) : reg(std::move(reg)) {
+}
+
+Context::RegisterHandle::RegisterHandle(RegisterContext* context) : m_context(context) {
+  m_context->inUse = true;
+}
+
+Context::RegisterHandle::~RegisterHandle() {
+  m_context->inUse = false;
+}
+
+const Register& Context::RegisterHandle::reg() const {
+  return m_context->reg;
+}
+
+std::string Context::RegisterHandle::asAsm(size_t size) const {
+  return m_context->reg.asAsm(size);
+}
+
 Context::Context() : m_impl(std::make_unique<ContextImpl>()) {
   m_primitiveTypes = {{"i8", {1, 1}}, {"i16", {2, 2}}, {"i32", {4, 4}}, {"i64", {8, 8}}};
+  m_registers = {
+      Register{Register::Kind::Original, "a"},
+      Register{Register::Kind::Original, "b"},
+      Register{Register::Kind::Original, "c"},
+      Register{Register::Kind::Original, "d"},
+      Register{Register::Kind::AMD64, "r8"},
+      Register{Register::Kind::AMD64, "r9"},
+      Register{Register::Kind::AMD64, "r10"},
+      Register{Register::Kind::AMD64, "r11"},
+      Register{Register::Kind::AMD64, "r12"},
+      Register{Register::Kind::AMD64, "r13"},
+      Register{Register::Kind::AMD64, "r14"},
+      Register{Register::Kind::AMD64, "r15"}};
 }
 
 void Context::pushScope() {
@@ -91,6 +123,15 @@ std::optional<Context::TypeContext> Context::type(const std::string& name) const
 
 size_t Context::nextLocalLabel() {
   return m_localLabels++;
+}
+
+std::unique_ptr<Context::RegisterHandle> Context::nextRegister() {
+  for (auto& reg : m_registers) {
+    if (!reg.inUse) {
+      return std::make_unique<RegisterHandle>(&reg);
+    }
+  }
+  throw GenerationException("Unable to get next register");
 }
 
 template <typename ReturnT>
