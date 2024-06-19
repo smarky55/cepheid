@@ -91,10 +91,10 @@ void Generator::genStatement(const Parser::Nodes::Node* node, Context& context) 
       genConditional(node, context);
       break;
     case NodeType::Loop:
-      // genLoop(node, context);
+      genLoop(node, context);
       break;
     case NodeType::Expression:
-      // TODO: how to handle expression statements?
+      genExpression(node, context);
       break;
     default:
       break;
@@ -155,7 +155,8 @@ void Generator::genVariableDeclaration(const Parser::Nodes::Node* node, Context&
 
   if (variableDeclaration->expression()) {
     const MemoryLocation location{"[ rsp + " + std::to_string(varContext->offset) + " ]"};
-    const std::unique_ptr<Location> resultLocation = genExpression(variableDeclaration->expression(), context);
+    std::unique_ptr<Location> resultLocation = genExpression(variableDeclaration->expression(), context);
+    resultLocation = writeImmediateToReg(std::move(resultLocation), context);
     writeInstruction("mov", {location.asAsm(varContext->size), resultLocation->asAsm(varContext->size)});
   }
 }
@@ -187,23 +188,28 @@ void Generator::genLoop(const Parser::Nodes::Node* node, Context& context) {
     throw GenerationException("Expected loop");
   }
 
-  const Register& conditionRegister = REGISTERS[0];
-
   if (const Parser::Nodes::Node* initExpression = loop->initExpression()) {
-    genExpression(initExpression, conditionRegister, context);
+    genExpression(initExpression, context);
   }
 
   const std::string conditionLabel = ".L" + std::to_string(context.nextLocalLabel());
   const std::string endLabel = ".L" + std::to_string(context.nextLocalLabel());
 
   writeLabel(conditionLabel);
-  genExpression(loop->conditionExpression(), conditionRegister, context);
-  writeInstruction("cmp", {conditionRegister.asAsm(1), "0"});
-  writeInstruction("je", {endLabel});
+  const std::unique_ptr<Location> conditionLocation = genExpression(loop->conditionExpression(), context);
+  std::unique_ptr<Comparison> comparison;
+  if (const auto resultComparison = dynamic_cast<Comparison*>(conditionLocation.get())) {
+    comparison = std::make_unique<Comparison>(*resultComparison);
+  } else {
+    writeInstruction("cmp", {conditionLocation->asAsm(8), "0"});
+    comparison = std::make_unique<Comparison>(Comparison::Type::Equal);
+  }
+  writeInstruction(comparison->jmpInstruction(true), {endLabel});
+
   genScope(loop->scope(), context);
 
   if (const Parser::Nodes::Node* updateExpression = loop->updateExpression()) {
-    genExpression(updateExpression, conditionRegister, context);
+    genExpression(updateExpression, context);
   }
 
   writeInstruction("jmp", {conditionLabel});
@@ -211,6 +217,9 @@ void Generator::genLoop(const Parser::Nodes::Node* node, Context& context) {
 }
 
 std::unique_ptr<Location> Generator::genExpression(const Parser::Nodes::Node* node, Context& context) {
+  if (node->type() == NodeType::Expression) {
+    return genExpression(node->children().front().get(), context);
+  }
   switch (node->type()) {
     case NodeType::BinaryOperation:
       return genBinaryOperation(node, context);
@@ -245,21 +254,27 @@ std::unique_ptr<Location> Generator::genBinaryOperation(const Parser::Nodes::Nod
       // instruction("idiv", {resultReg, rhsReg});
       break;
     case Parser::Nodes::BinaryOperationType::Equal:
+      rhsLoc = writeImmediateToReg(std::move(rhsLoc), context);
       writeInstruction("cmp", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
       return std::make_unique<Comparison>(Comparison::Type::Equal);
     case Parser::Nodes::BinaryOperationType::NotEqual:
+      rhsLoc = writeImmediateToReg(std::move(rhsLoc), context);
       writeInstruction("cmp", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
       return std::make_unique<Comparison>(Comparison::Type::NotEqual);
     case Parser::Nodes::BinaryOperationType::GreaterEqual:
+      rhsLoc = writeImmediateToReg(std::move(rhsLoc), context);
       writeInstruction("cmp", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
       return std::make_unique<Comparison>(Comparison::Type::GreaterEqual);
     case Parser::Nodes::BinaryOperationType::GreaterThan:
+      rhsLoc = writeImmediateToReg(std::move(rhsLoc), context);
       writeInstruction("cmp", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
       return std::make_unique<Comparison>(Comparison::Type::Greater);
     case Parser::Nodes::BinaryOperationType::LessEqual:
+      rhsLoc = writeImmediateToReg(std::move(rhsLoc), context);
       writeInstruction("cmp", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
       return std::make_unique<Comparison>(Comparison::Type::LessEqual);
     case Parser::Nodes::BinaryOperationType::LessThan:
+      rhsLoc = writeImmediateToReg(std::move(rhsLoc), context);
       writeInstruction("cmp", {lhsLoc->asAsm(8), rhsLoc->asAsm(8)});
       return std::make_unique<Comparison>(Comparison::Type::Less);
     case Parser::Nodes::BinaryOperationType::Assign:

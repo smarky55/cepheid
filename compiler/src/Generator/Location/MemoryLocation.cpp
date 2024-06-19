@@ -14,7 +14,7 @@ std::string Cepheid::Gen::MemoryLocation::asAsm(size_t size) const {
     case 4:
       return "DWORD " + m_location;
     case 8:
-      return m_location;
+      return "QWORD " + m_location;
     default:
       throw GenerationException("Unexpected size");
   }

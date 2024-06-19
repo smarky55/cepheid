@@ -128,6 +128,8 @@ NodePtr Parser::parseStatement() {
     return ifStatement;
   } else if (NodePtr loopStatement = parseLoopStatement()) {
     return loopStatement;
+  } else if (NodePtr expressionStatement = parseExpressionStatement()) {
+    return expressionStatement;
   }
   return nullptr;
 }
@@ -304,7 +306,7 @@ std::optional<Token> Parser::parseOperator(const std::vector<std::string_view>& 
 }
 
 NodePtr Parser::parseExpression() {
-  return parseEqualityOperation();
+  return Nodes::Node::make(Nodes::NodeType::Expression, parseEqualityOperation());
 }
 
 NodePtr Parser::parserAssignmentOperation() {
