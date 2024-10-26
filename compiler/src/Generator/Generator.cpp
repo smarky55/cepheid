@@ -315,7 +315,6 @@ std::unique_ptr<Location> Generator::genBaseOperation(const Parser::Nodes::Node*
   switch (node->type()) {
     case NodeType::IntegerLiteral:
       return std::make_unique<IntegerLiteral>(node->token()->value.value());
-      break;
     case NodeType::Identifier: {
       const std::string identName = node->token()->value.value();
       const std::optional<Context::VariableContext> varContext = context.variable(identName);

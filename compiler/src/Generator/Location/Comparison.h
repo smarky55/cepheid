@@ -4,15 +4,8 @@
 
 namespace Cepheid::Gen {
 class Comparison : public Location {
-public:
-  enum class Type {
-    Less,
-    LessEqual,
-    Equal,
-    NotEqual,
-    Greater,
-    GreaterEqual
-  };
+ public:
+  enum class Type { Less, LessEqual, Equal, NotEqual, Greater, GreaterEqual };
 
   explicit Comparison(Type type);
 
@@ -20,8 +13,8 @@ public:
   [[nodiscard]] std::string setInstruction() const;
   [[nodiscard]] std::string jmpInstruction(bool inverse) const;
 
-private:
+ private:
   Type m_type;
 };
 
-}
+}  // namespace Cepheid::Gen
