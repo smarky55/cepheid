@@ -6,6 +6,7 @@ class Type;
 class Value {
  public:
   explicit Value(const Type* type);
+  virtual ~Value() = default;
 
   const Type* type() const;
 

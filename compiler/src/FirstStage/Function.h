@@ -16,6 +16,8 @@ class Function {
  public:
   explicit Function(const Parser::Nodes::Function& funcNode, const Module* parent);
 
+  void evaluate();
+
  private:
   void addStatement(const Parser::Nodes::Node& node);
   void addScope(const Parser::Nodes::Node& node);
@@ -38,6 +40,7 @@ class Function {
   //std::vector<const Type*> m_parameters;
   std::vector<std::unique_ptr<Statement>> m_statements;
   std::map<std::string, const Type*> m_variables;
+  const Parser::Nodes::Function* m_functionNode;
   int m_temporaryIndex = 1;
   int m_labelIndex = 0;
   EvaluationContext m_evaluationContext;

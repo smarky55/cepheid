@@ -1,7 +1,7 @@
 func main() -> i32 {
   i64 bar = 4;
   while (bar > 0) {
-    bar--;
+    --bar;
   }
   return bar;
 }

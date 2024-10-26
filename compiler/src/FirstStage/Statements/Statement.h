@@ -6,6 +6,7 @@
 namespace Cepheid::Eval {
 class Statement {
  public:
+  virtual ~Statement() = default;
 };
 
 }  // namespace Cepheid::Eval

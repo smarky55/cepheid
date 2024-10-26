@@ -3,12 +3,10 @@
 #include <map>
 #include <Parser/Parser.h>
 
-namespace Cepheid::Eval {
-class Type;
-}
+#include <FirstStage/Function.h>
+#include <FirstStage/Type.h>
 
 namespace Cepheid::Eval {
-class Function;
 
 class Module {
  public:
@@ -16,6 +14,8 @@ class Module {
   explicit Module(const Parser::Nodes::Node& moduleNode, const Module* parent);
 
   const Type* type(const std::string& name) const;
+
+  void evaluate();
 
  private:
   void add(const Parser::Nodes::Node& node);

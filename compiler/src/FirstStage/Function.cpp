@@ -21,9 +21,12 @@
 #include <Parser/Node/VariableDeclaration.h>
 
 Cepheid::Eval::Function::Function(const Parser::Nodes::Function& funcNode, const Module* parent)
-    : m_parent(parent), m_name(funcNode.name()) {
+    : m_parent(parent), m_name(funcNode.name()), m_functionNode(&funcNode) {
+}
+
+void Cepheid::Eval::Function::evaluate() {
   // TODO: add function parameters
-  addScope(*funcNode.scope());
+  addScope(*m_functionNode->scope());
 }
 
 void Cepheid::Eval::Function::addStatement(const Parser::Nodes::Node& node) {
@@ -68,7 +71,7 @@ void Cepheid::Eval::Function::addVariableDeclaration(const Parser::Nodes::Node& 
   }
   // TODO: Variable declaration
   // Make a note of the variable
-  const Type* type = m_parent->type(*variableNode->typeName()->token()->value);
+  const Type* type = m_parent->type(*variableNode->typeName()->child(Parser::Nodes::NodeType::Identifier)->token()->value);
   if (const auto& [it, success] = m_variables.try_emplace(variableNode->name(), type); !success) {
     throw EvaluationException("Variable already defined");
   }
