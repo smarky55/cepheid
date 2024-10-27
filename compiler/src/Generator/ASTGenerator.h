@@ -13,9 +13,9 @@ class Context;
 class Location;
 class Register;
 
-class Generator {
+class ASTGenerator {
  public:
-  explicit Generator(Parser::Nodes::NodePtr root);
+  explicit ASTGenerator(Parser::Nodes::NodePtr root);
 
   [[nodiscard]] std::string generate();
 

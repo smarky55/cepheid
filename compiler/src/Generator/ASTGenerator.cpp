@@ -1,4 +1,4 @@
-#include "Generator.h"
+#include "ASTGenerator.h"
 
 #include <Generator/Context.h>
 #include <Generator/GenerationException.h>
@@ -24,17 +24,17 @@ using namespace Cepheid::Gen;
 
 using Cepheid::Parser::Nodes::NodeType;
 
-Generator::Generator(Parser::Nodes::NodePtr root) : m_root(std::move(root)) {
+ASTGenerator::ASTGenerator(Parser::Nodes::NodePtr root) : m_root(std::move(root)) {
 }
 
-std::string Generator::generate() {
+std::string ASTGenerator::generate() {
   Context context;
   genProgram(m_root.get(), context);
 
   return m_program.str();
 }
 
-void Generator::genProgram(const Parser::Nodes::Node* node, Context& context) {
+void ASTGenerator::genProgram(const Parser::Nodes::Node* node, Context& context) {
   m_program << R"(bits 64
 default rel
 
@@ -62,7 +62,7 @@ _entry:
   }
 }
 
-void Generator::genScope(const Parser::Nodes::Scope* scope, Context& context) {
+void ASTGenerator::genScope(const Parser::Nodes::Scope* scope, Context& context) {
   context.pushScope();
 
   if (!scope) {
@@ -76,7 +76,7 @@ void Generator::genScope(const Parser::Nodes::Scope* scope, Context& context) {
   context.popScope();
 }
 
-void Generator::genStatement(const Parser::Nodes::Node* node, Context& context) {
+void ASTGenerator::genStatement(const Parser::Nodes::Node* node, Context& context) {
   switch (node->type()) {
     case NodeType::Function:
       genFunction(node, context);
@@ -101,7 +101,7 @@ void Generator::genStatement(const Parser::Nodes::Node* node, Context& context) 
   }
 }
 
-void Generator::genFunction(const Parser::Nodes::Node* node, Context& context) {
+void ASTGenerator::genFunction(const Parser::Nodes::Node* node, Context& context) {
   std::string body;
 
   const auto function = dynamic_cast<const Parser::Nodes::Function*>(node);
@@ -127,7 +127,7 @@ void Generator::genFunction(const Parser::Nodes::Node* node, Context& context) {
   context.popFunction();
 }
 
-void Generator::genReturn(const Parser::Nodes::Node* node, Context& context) {
+void ASTGenerator::genReturn(const Parser::Nodes::Node* node, Context& context) {
   std::string ret;
   // Compute expression
   if (!node->children().empty()) {
@@ -140,7 +140,7 @@ void Generator::genReturn(const Parser::Nodes::Node* node, Context& context) {
   writeInstruction("ret", {});
 }
 
-void Generator::genVariableDeclaration(const Parser::Nodes::Node* node, Context& context) {
+void ASTGenerator::genVariableDeclaration(const Parser::Nodes::Node* node, Context& context) {
   const auto variableDeclaration = dynamic_cast<const Parser::Nodes::VariableDeclaration*>(node);
   if (!variableDeclaration) {
     throw GenerationException("Expected variable declaration");
@@ -161,7 +161,7 @@ void Generator::genVariableDeclaration(const Parser::Nodes::Node* node, Context&
   }
 }
 
-void Generator::genConditional(const Parser::Nodes::Node* node, Context& context) {
+void ASTGenerator::genConditional(const Parser::Nodes::Node* node, Context& context) {
   const auto conditional = dynamic_cast<const Parser::Nodes::Conditional*>(node);
   if (!conditional) {
     throw GenerationException("Expected conditional");
@@ -182,7 +182,7 @@ void Generator::genConditional(const Parser::Nodes::Node* node, Context& context
   writeLabel(label);
 }
 
-void Generator::genLoop(const Parser::Nodes::Node* node, Context& context) {
+void ASTGenerator::genLoop(const Parser::Nodes::Node* node, Context& context) {
   const auto loop = dynamic_cast<const Parser::Nodes::Loop*>(node);
   if (!loop) {
     throw GenerationException("Expected loop");
@@ -216,7 +216,7 @@ void Generator::genLoop(const Parser::Nodes::Node* node, Context& context) {
   writeLabel(endLabel);
 }
 
-std::unique_ptr<Location> Generator::genExpression(const Parser::Nodes::Node* node, Context& context) {
+std::unique_ptr<Location> ASTGenerator::genExpression(const Parser::Nodes::Node* node, Context& context) {
   if (node->type() == NodeType::Expression) {
     return genExpression(node->children().front().get(), context);
   }
@@ -230,7 +230,7 @@ std::unique_ptr<Location> Generator::genExpression(const Parser::Nodes::Node* no
   }
 }
 
-std::unique_ptr<Location> Generator::genBinaryOperation(const Parser::Nodes::Node* node, Context& context) {
+std::unique_ptr<Location> ASTGenerator::genBinaryOperation(const Parser::Nodes::Node* node, Context& context) {
   const auto* binaryNode = dynamic_cast<const Parser::Nodes::BinaryOperation*>(node);
   std::unique_ptr<Location> lhsLoc = genExpression(binaryNode->lhs(), context);
   std::unique_ptr<Location> rhsLoc = genExpression(binaryNode->rhs(), context);
@@ -286,7 +286,7 @@ std::unique_ptr<Location> Generator::genBinaryOperation(const Parser::Nodes::Nod
   return lhsLoc;
 }
 
-std::unique_ptr<Location> Generator::genUnaryOperation(const Parser::Nodes::Node* node, Context& context) {
+std::unique_ptr<Location> ASTGenerator::genUnaryOperation(const Parser::Nodes::Node* node, Context& context) {
   const auto* unaryNode = dynamic_cast<const Parser::Nodes::UnaryOperation*>(node);
   std::unique_ptr<Location> resultLocation = genExpression(unaryNode->operand(), context);
   resultLocation = writeComparisonToReg(std::move(resultLocation), context);
@@ -311,7 +311,7 @@ std::unique_ptr<Location> Generator::genUnaryOperation(const Parser::Nodes::Node
   return resultLocation;
 }
 
-std::unique_ptr<Location> Generator::genBaseOperation(const Parser::Nodes::Node* node, Context& context) {
+std::unique_ptr<Location> ASTGenerator::genBaseOperation(const Parser::Nodes::Node* node, Context& context) {
   switch (node->type()) {
     case NodeType::IntegerLiteral:
       return std::make_unique<IntegerLiteral>(node->token()->value.value());
@@ -329,7 +329,7 @@ std::unique_ptr<Location> Generator::genBaseOperation(const Parser::Nodes::Node*
   }
 }
 
-void Generator::writeInstruction(std::string_view inst, const std::vector<std::string_view>& args) {
+void ASTGenerator::writeInstruction(std::string_view inst, const std::vector<std::string_view>& args) {
   m_program << "  " << inst;
   if (!args.empty()) {
     m_program << " " << args[0];
@@ -340,11 +340,11 @@ void Generator::writeInstruction(std::string_view inst, const std::vector<std::s
   m_program << "\n";
 }
 
-void Generator::writeLabel(std::string_view label) {
+void ASTGenerator::writeLabel(std::string_view label) {
   m_program << label << ":\n";
 }
 
-std::unique_ptr<Location> Generator::writeComparisonToReg(std::unique_ptr<Location> loc, Context& context) {
+std::unique_ptr<Location> ASTGenerator::writeComparisonToReg(std::unique_ptr<Location> loc, Context& context) {
   if (const auto comparison = dynamic_cast<Comparison*>(loc.get())) {
     std::unique_ptr<Location> resultLocation = context.nextRegister();
 
@@ -356,7 +356,7 @@ std::unique_ptr<Location> Generator::writeComparisonToReg(std::unique_ptr<Locati
   return loc;
 }
 
-std::unique_ptr<Location> Generator::writeImmediateToReg(std::unique_ptr<Location> loc, Context& context) {
+std::unique_ptr<Location> ASTGenerator::writeImmediateToReg(std::unique_ptr<Location> loc, Context& context) {
   if (const auto literal = dynamic_cast<IntegerLiteral*>(loc.get())) {
     std::unique_ptr<Location> resultLocation = context.nextRegister();
 
