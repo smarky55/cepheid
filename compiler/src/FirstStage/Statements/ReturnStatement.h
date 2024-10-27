@@ -8,7 +8,9 @@ class ReturnStatement : public Statement {
  public:
   explicit ReturnStatement(std::shared_ptr<Value> result);
 
-private:
+  void accept(StatementVisitor& visitor) override;
+
+ private:
   std::shared_ptr<Value> m_result;
 };
 

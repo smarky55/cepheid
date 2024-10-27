@@ -8,6 +8,8 @@ class Label :public Statement {
 public:
   explicit Label(std::string_view name);
 
+ void accept(StatementVisitor& visitor) override;
+
 private:
   std::string m_name;
 };

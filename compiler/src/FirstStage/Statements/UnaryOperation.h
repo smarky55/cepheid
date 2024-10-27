@@ -10,6 +10,8 @@ class UnaryOperation : public Statement {
   using OperationType = Parser::Nodes::UnaryOperationType;
   UnaryOperation(OperationType type, std::shared_ptr<Value> result, std::shared_ptr<Value> operand);
 
+  void accept(StatementVisitor& visitor) override;
+
  private:
   OperationType m_type;
   std::shared_ptr<Value> m_result;

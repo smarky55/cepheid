@@ -13,6 +13,8 @@ class JumpStatement : public Statement {
 
   JumpStatement(std::string_view destination, JumpIf jumpIf, std::shared_ptr<Value> comparisonValue = nullptr);
 
+  void accept(StatementVisitor& visitor) override;
+
  private:
   std::string m_destination;
   std::shared_ptr<Value> m_comparison;

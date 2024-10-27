@@ -11,6 +11,8 @@ class BinaryOperation : public Statement {
   using Type = Parser::Nodes::BinaryOperationType;
   BinaryOperation(Type type, std::shared_ptr<Value> result, std::shared_ptr<Value> lhs, std::shared_ptr<Value> rhs);
 
+  void accept(StatementVisitor& visitor) override;
+
  private:
   Type m_type;
   std::shared_ptr<Value> m_result;
