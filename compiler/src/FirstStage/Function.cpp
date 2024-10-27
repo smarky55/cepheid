@@ -12,7 +12,6 @@
 #include <FirstStage/Statements/Label.h>
 #include <FirstStage/Statements/ReturnStatement.h>
 #include <FirstStage/Statements/UnaryOperation.h>
-#include <nlohmann/thirdparty/hedley/hedley.hpp>
 #include <Parser/Node/BinaryOperation.h>
 #include <Parser/Node/Conditional.h>
 #include <Parser/Node/Loop.h>
@@ -69,17 +68,17 @@ void Cepheid::Eval::Function::addVariableDeclaration(const Parser::Nodes::Node& 
   if (!variableNode) {
     throw EvaluationException("Invalid node type for variable declaration");
   }
-  // TODO: Variable declaration
+
   // Make a note of the variable
   const Type* type = m_parent->type(*variableNode->typeName()->child(Parser::Nodes::NodeType::Identifier)->token()->value);
-  if (const auto& [it, success] = m_variables.try_emplace(variableNode->name(), type); !success) {
+  std::string name = variableNode->name();
+  if (const auto& [it, success] = m_variables.try_emplace(name, type); !success) {
     throw EvaluationException("Variable already defined");
   }
-  // Allocate a space
 
-  auto destination = addExpression(*variableNode->expression());
-
-  // Assign to variable?
+  auto rhs = addExpression(*variableNode->expression());
+  auto destination = std::make_shared<VariableValue>(type, name);
+  emplaceStatement<BinaryOperation>(Parser::Nodes::BinaryOperationType::Assign, destination, destination, rhs);
 }
 
 void Cepheid::Eval::Function::addReturn(const Parser::Nodes::Node& node) {

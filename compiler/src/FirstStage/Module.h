@@ -10,7 +10,6 @@ namespace Cepheid::Eval {
 
 class Module {
  public:
-  explicit Module(std::string_view name);
   explicit Module(const Parser::Nodes::Node& moduleNode, const Module* parent);
 
   const Type* type(const std::string& name) const;
@@ -21,6 +20,10 @@ class Module {
   void add(const Parser::Nodes::Node& node);
   void addModule(const Parser::Nodes::Node& node);
   void addFunction(const Parser::Nodes::Node& node);
+
+  void addType(std::string_view name, std::size_t size, std::size_t alignment);
+
+  void initAsRoot();
 
   const Module* m_parent;
   std::string m_name;

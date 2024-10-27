@@ -9,12 +9,13 @@
 
 using namespace Cepheid::Eval;
 
-Module::Module(std::string_view name) : m_name(name) {
-}
-
 Module::Module(const Parser::Nodes::Node& moduleNode, const Module* parent) : m_parent(parent) {
   for (const auto& child : moduleNode.children()) {
     add(*child);
+  }
+
+  if (!parent) {
+    initAsRoot();
   }
 }
 
@@ -51,4 +52,15 @@ void Module::addModule(const Cepheid::Parser::Nodes::Node& node) {
 void Module::addFunction(const Parser::Nodes::Node& node) {
   const auto& functionNode = dynamic_cast<const Parser::Nodes::Function&>(node);
   m_functions.try_emplace(functionNode.name(), functionNode, this);
+}
+
+void Module::addType(std::string_view name, std::size_t size, std::size_t alignment) {
+  m_types.try_emplace(std::string(name), name, size, alignment);
+}
+
+void Module::initAsRoot() {
+  addType("i8", 1, 1);
+  addType("i16",2, 2);
+  addType("i32", 4, 4);
+  addType("i64", 8, 8);
 }
